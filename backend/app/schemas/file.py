@@ -16,6 +16,9 @@ class FileResponse(FileBase):
     file_size: int
     mime_type: Optional[str] = None
     user_id: int
+    is_oss: bool = False
+    oss_path: Optional[str] = None
+    oss_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

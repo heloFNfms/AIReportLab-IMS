@@ -98,6 +98,16 @@
           style="width: 100%"
         >
           <el-table-column prop="filename" label="文件名" min-width="200" />
+          <el-table-column label="存储位置" width="110">
+            <template #default="{ row }">
+              <el-tag :type="row.is_oss ? 'success' : 'info'" size="small">
+                <el-icon style="margin-right: 4px;">
+                  <component :is="row.is_oss ? 'CloudUpload' : 'Monitor'" />
+                </el-icon>
+                {{ row.is_oss ? '云端' : '本地' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="文件类型" width="120">
             <template #default="{ row }">
               <el-tag :type="getFileTypeTagType(row.file_type)">
@@ -149,6 +159,23 @@
       width="500px"
     >
       <el-form :model="uploadForm" label-width="100px">
+        <el-form-item label="存储方式" required>
+          <el-select v-model="uploadForm.storageType" placeholder="请选择存储方式">
+            <el-option label="本地存储" value="local">
+              <div style="display: flex; flex-direction: column;">
+                <span>本地存储</span>
+                <span style="font-size: 12px; color: #909399;">存储在服务器本地磁盘</span>
+              </div>
+            </el-option>
+            <el-option label="云端存储 (OSS)" value="oss">
+              <div style="display: flex; flex-direction: column;">
+                <span>云端存储 (OSS)</span>
+                <span style="font-size: 12px; color: #909399;">存储在阿里云OSS，访问更快</span>
+              </div>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        
         <el-form-item label="文件类型" required>
           <el-select v-model="uploadForm.fileType" placeholder="请选择文件类型">
             <el-option label="模板文件" value="template" />
@@ -210,7 +237,9 @@ import {
   Upload,
   Download,
   Delete,
-  UploadFilled
+  UploadFilled,
+  CloudUpload,
+  Monitor
 } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
@@ -224,9 +253,11 @@ const uploadRef = ref<UploadInstance>()
 const uploadForm = reactive<{
   file: File | null
   fileType: FileType | ''
+  storageType: 'local' | 'oss'
 }>({
   file: null,
   fileType: '',
+  storageType: 'local',
 })
 
 // 初始化数据
@@ -268,11 +299,17 @@ const handleUpload = async () => {
 
   uploading.value = true
   try {
-    await fileStore.uploadFile(uploadForm.file, uploadForm.fileType as FileType)
+    // 根据存储方式选择不同的上传方法
+    if (uploadForm.storageType === 'oss') {
+      await fileStore.uploadFileToOSS(uploadForm.file, uploadForm.fileType as FileType)
+    } else {
+      await fileStore.uploadFile(uploadForm.file, uploadForm.fileType as FileType)
+    }
     uploadDialogVisible.value = false
     // 重置表单
     uploadForm.file = null
     uploadForm.fileType = ''
+    uploadForm.storageType = 'local'
     uploadRef.value?.clearFiles()
   } finally {
     uploading.value = false

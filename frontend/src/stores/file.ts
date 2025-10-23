@@ -5,6 +5,7 @@ import {
   getFiles, 
   getFileStatistics, 
   uploadFile as uploadFileApi,
+  uploadFileToOSS as uploadFileToOSSApi,
   deleteFile as deleteFileApi,
   downloadFile as downloadFileApi
 } from '@/api'
@@ -45,18 +46,36 @@ export const useFileStore = defineStore('file', () => {
     }
   }
 
-  // 上传文件
+  // 上传文件到本地
   const uploadFile = async (file: File, fileType: FileType) => {
     loading.value = true
     try {
-      const res = await uploadFileApi(file, fileType)
-      ElMessage.success('文件上传成功')
+      await uploadFileApi(file, fileType)
+      ElMessage.success('文件上传成功（本地存储）')
       // 刷新文件列表和统计信息
       await fetchFiles()
       await fetchStatistics()
       return true
     } catch (error) {
       console.error('文件上传失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 上传文件到OSS
+  const uploadFileToOSS = async (file: File, fileType: FileType) => {
+    loading.value = true
+    try {
+      await uploadFileToOSSApi(file, fileType)
+      ElMessage.success('文件上传成功（云端存储）')
+      // 刷新文件列表和统计信息
+      await fetchFiles()
+      await fetchStatistics()
+      return true
+    } catch (error) {
+      console.error('文件上传到OSS失败:', error)
       return false
     } finally {
       loading.value = false
@@ -100,6 +119,7 @@ export const useFileStore = defineStore('file', () => {
     fetchFiles,
     fetchStatistics,
     uploadFile,
+    uploadFileToOSS,
     deleteFile,
     downloadFile,
   }

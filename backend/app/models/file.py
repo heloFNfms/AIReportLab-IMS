@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.sql import func
 from app.db.database import Base
 import enum
@@ -18,5 +18,11 @@ class File(Base):
     file_size = Column(Integer, nullable=False)  # 文件大小（字节）
     mime_type = Column(String(100), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # OSS相关字段
+    is_oss = Column(Boolean, default=False)  # 是否上传到OSS
+    oss_path = Column(String(500), nullable=True)  # OSS存储路径
+    oss_url = Column(String(500), nullable=True)  # OSS访问URL
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

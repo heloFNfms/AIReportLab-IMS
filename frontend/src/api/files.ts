@@ -2,7 +2,7 @@ import request from './request'
 import type { FileInfo, FileStatistics, FileType } from '@/types'
 
 /**
- * 上传文件
+ * 上传文件到本地
  */
 export const uploadFile = (file: File, fileType: FileType) => {
   const formData = new FormData()
@@ -10,6 +10,24 @@ export const uploadFile = (file: File, fileType: FileType) => {
   
   return request<FileInfo>({
     url: '/files/upload',
+    method: 'post',
+    params: { file_type: fileType },
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+}
+
+/**
+ * 上传文件到阿里云OSS
+ */
+export const uploadFileToOSS = (file: File, fileType: FileType) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  return request<FileInfo>({
+    url: '/files/upload-oss',
     method: 'post',
     params: { file_type: fileType },
     data: formData,

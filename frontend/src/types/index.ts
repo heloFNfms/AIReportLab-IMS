@@ -38,6 +38,9 @@ export interface FileInfo {
   file_size: number
   mime_type: string | null
   user_id: number
+  is_oss: boolean
+  oss_path: string | null
+  oss_url: string | null
   created_at: string
   updated_at: string
 }
