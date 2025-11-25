@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     OSS_ENDPOINT: str = os.getenv("OSS_ENDPOINT", "oss-cn-hangzhou.aliyuncs.com")
     OSS_URL_PREFIX: str = os.getenv("OSS_URL_PREFIX", "")
     
+    # AI服务配置
+    # ⚠️ 使用AI功能前必须配置API密钥！
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "openai")  # 支持: openai, claude, deepseek等
+    AI_API_KEY: str = os.getenv("AI_API_KEY", "")
+    AI_BASE_URL: str = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+    AI_MODEL: str = os.getenv("AI_MODEL", "gpt-4o-mini")
+    AI_TIMEOUT: int = int(os.getenv("AI_TIMEOUT", "60"))  # API调用超时时间（秒）
+    AI_MAX_TOKENS: int = int(os.getenv("AI_MAX_TOKENS", "4096"))  # 最大token数
+    
     # 服务器配置
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))

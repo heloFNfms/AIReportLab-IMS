@@ -33,7 +33,6 @@ export enum FileType {
 export interface FileInfo {
   id: number
   filename: string
-  file_path: string
   file_type: FileType
   file_size: number
   mime_type: string | null

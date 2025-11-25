@@ -74,9 +74,13 @@ def delete_file(db: Session, file_id: int, user_id: int):
     # 删除物理文件
     try:
         if file.is_oss:
-            # 如果是OSS文件，从OSS删除
             if file.oss_path:
-                oss_service.delete_file(file.oss_path)
+                ok = oss_service.delete_file(file.oss_path)
+                if not ok:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="OSS文件删除失败"
+                    )
         else:
             # 如果是本地文件，从本地删除
             if os.path.exists(file.file_path):

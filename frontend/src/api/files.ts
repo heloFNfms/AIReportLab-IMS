@@ -7,15 +7,12 @@ import type { FileInfo, FileStatistics, FileType } from '@/types'
 export const uploadFile = (file: File, fileType: FileType) => {
   const formData = new FormData()
   formData.append('file', file)
-  
+
   return request<FileInfo>({
     url: '/files/upload',
     method: 'post',
     params: { file_type: fileType },
     data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
   })
 }
 
@@ -25,15 +22,12 @@ export const uploadFile = (file: File, fileType: FileType) => {
 export const uploadFileToOSS = (file: File, fileType: FileType) => {
   const formData = new FormData()
   formData.append('file', file)
-  
+
   return request<FileInfo>({
     url: '/files/upload-oss',
     method: 'post',
     params: { file_type: fileType },
     data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
   })
 }
 

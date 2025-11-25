@@ -12,7 +12,6 @@ class FileCreate(FileBase):
 
 class FileResponse(FileBase):
     id: int
-    file_path: str
     file_size: int
     mime_type: Optional[str] = None
     user_id: int

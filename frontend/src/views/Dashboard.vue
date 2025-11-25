@@ -1,20 +1,27 @@
 <template>
   <div class="dashboard-container">
     <!-- 顶部导航栏 -->
-    <el-header class="dashboard-header">
+  <el-header class="dashboard-header">
       <div class="header-left">
         <h2>AIReportLab IMS</h2>
       </div>
-      <div class="header-right">
-        <span class="username">{{ userStore.userInfo?.username }}</span>
-        <el-button type="danger" @click="handleLogout">退出登录</el-button>
-      </div>
+  <div class="header-right">
+    <span class="username">{{ userStore.userInfo?.username }}</span>
+    <el-switch
+      v-model="isDark"
+      inline-prompt
+      active-text="暗色"
+      inactive-text="明亮"
+      class="theme-switch"
+    />
+    <el-button type="danger" @click="handleLogout">退出登录</el-button>
+  </div>
     </el-header>
 
     <!-- 主内容区 -->
     <el-main class="dashboard-main">
       <!-- 统计卡片 -->
-      <el-row :gutter="20" class="statistics-row">
+<el-row v-if="!statsLoading" :gutter="20" class="statistics-row">
         <el-col :xs="24" :sm="12" :md="6">
           <el-card shadow="hover" class="stat-card">
             <div class="stat-item">
@@ -74,7 +81,7 @@
                 v-model="filterType"
                 placeholder="筛选文件类型"
                 clearable
-                style="width: 150px; margin-right: 10px"
+                class="filter-select"
                 @change="handleFilterChange"
               >
                 <el-option label="全部文件" value="" />
@@ -91,18 +98,19 @@
         </template>
 
         <!-- 文件列表 -->
-        <el-table
-          v-loading="fileStore.loading"
-          :data="fileStore.files"
-          stripe
-          style="width: 100%"
-        >
+        <template v-if="fileStore.files.length > 0">
+          <el-table
+            v-loading="fileStore.loading"
+            :data="pagedFiles"
+            stripe
+            style="width: 100%"
+          >
           <el-table-column prop="filename" label="文件名" min-width="200" />
           <el-table-column label="存储位置" width="110">
             <template #default="{ row }">
               <el-tag :type="row.is_oss ? 'success' : 'info'" size="small">
                 <el-icon style="margin-right: 4px;">
-                  <component :is="row.is_oss ? 'CloudUpload' : 'Monitor'" />
+                  <component :is="row.is_oss ? CloudUpload : Monitor" />
                 </el-icon>
                 {{ row.is_oss ? '云端' : '本地' }}
               </el-tag>
@@ -130,6 +138,7 @@
               <el-button
                 type="primary"
                 size="small"
+                class="op-btn"
                 @click="handleDownload(row)"
               >
                 <el-icon><Download /></el-icon>
@@ -140,7 +149,7 @@
                 @confirm="handleDelete(row.id)"
               >
                 <template #reference>
-                  <el-button type="danger" size="small">
+                  <el-button type="danger" size="small" class="op-btn">
                     <el-icon><Delete /></el-icon>
                     删除
                   </el-button>
@@ -148,7 +157,28 @@
               </el-popconfirm>
             </template>
           </el-table-column>
-        </el-table>
+          </el-table>
+          <div style="display:flex; justify-content:flex-end; margin-top: 12px;">
+            <el-pagination
+              background
+              :current-page="currentPage"
+              :page-size="pageSize"
+              :page-sizes="[10, 20, 50]"
+              layout="prev, pager, next, sizes, total"
+              :total="totalFiles"
+              @current-change="handlePageChange"
+              @size-change="handleSizeChange"
+            />
+          </div>
+        </template>
+        <template v-else>
+          <el-empty description="暂无文件">
+            <el-button type="primary" @click="uploadDialogVisible = true">
+              <el-icon><Upload /></el-icon>
+              立即上传
+            </el-button>
+          </el-empty>
+        </template>
       </el-card>
     </el-main>
 
@@ -193,7 +223,7 @@
             :on-exceed="handleExceed"
             drag
           >
-            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">
               拖拽文件到此处或<em>点击上传</em>
             </div>
@@ -222,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useFileStore } from '@/stores/file'
 import { formatFileSize, formatDateTime, getFileTypeLabel, getFileTypeTagType } from '@/utils/format'
@@ -238,9 +268,10 @@ import {
   Download,
   Delete,
   UploadFilled,
-  CloudUpload,
+  Cloudy,
   Monitor
 } from '@element-plus/icons-vue'
+const CloudUpload = Cloudy
 
 const userStore = useUserStore()
 const fileStore = useFileStore()
@@ -249,6 +280,16 @@ const uploadDialogVisible = ref(false)
 const uploading = ref(false)
 const filterType = ref<FileType | ''>('')
 const uploadRef = ref<UploadInstance>()
+const statsLoading = ref(true)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalFiles = computed(() => fileStore.files.length)
+const pagedFiles = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return fileStore.files.slice(start, end)
+})
+const isDark = ref(false)
 
 const uploadForm = reactive<{
   file: File | null
@@ -262,8 +303,13 @@ const uploadForm = reactive<{
 
 // 初始化数据
 onMounted(async () => {
+  statsLoading.value = true
+  const theme = localStorage.getItem('theme')
+  isDark.value = theme === 'dark'
+  document.documentElement.classList.toggle('dark', isDark.value)
   await fileStore.fetchFiles()
   await fileStore.fetchStatistics()
+  statsLoading.value = false
 })
 
 // 退出登录
@@ -318,6 +364,18 @@ const handleUpload = async () => {
 
 // 下载文件
 const handleDownload = async (file: FileInfo) => {
+  // 云端文件通过后端下载接口重定向至 OSS 签名URL，避免跨域与 Blob 处理问题
+  if (file.is_oss) {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api'
+    const url = `${base}/files/${file.id}/download`
+    const link = document.createElement('a')
+    link.href = url
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    return
+  }
   await fileStore.downloadFile(file.id, file.filename)
 }
 
@@ -325,6 +383,20 @@ const handleDownload = async (file: FileInfo) => {
 const handleDelete = async (fileId: number) => {
   await fileStore.deleteFile(fileId)
 }
+
+// 分页操作
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+}
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+}
+
+watch(isDark, (val) => {
+  document.documentElement.classList.toggle('dark', val)
+  localStorage.setItem('theme', val ? 'dark' : 'light')
+})
 </script>
 
 <style scoped>
@@ -333,52 +405,56 @@ const handleDelete = async (fileId: number) => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f5f7fa;
+  background-color: var(--bg-page);
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
-  border-bottom: 1px solid #e4e7ed;
-  padding: 0 30px;
+  background: linear-gradient(135deg, var(--brand-gradient-start) 0%, var(--brand-gradient-end) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  padding: 0 var(--space-16);
   height: 60px;
 }
 
 .header-left h2 {
   margin: 0;
-  color: #409EFF;
+  color: #fff;
   font-size: 22px;
+  letter-spacing: 0.5px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-16);
 }
 
 .username {
   font-size: 14px;
-  color: #606266;
+  color: #f2f6fc;
 }
 
 .dashboard-main {
-  padding: 20px;
+  padding: var(--space-16);
   overflow-y: auto;
 }
 
 .statistics-row {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-16);
 }
 
 .stat-card {
   cursor: pointer;
-  transition: transform 0.3s;
+  border-radius: 12px;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .stat-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-item {
@@ -388,7 +464,7 @@ const handleDelete = async (fileId: number) => {
 
 .stat-icon {
   font-size: 48px;
-  margin-right: 20px;
+  margin-right: var(--space-16);
 }
 
 .stat-content {
@@ -398,17 +474,18 @@ const handleDelete = async (fileId: number) => {
 .stat-value {
   font-size: 28px;
   font-weight: bold;
-  color: #303133;
+  color: var(--text-primary);
   margin-bottom: 5px;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .file-section {
-  margin-top: 20px;
+  margin-top: var(--space-16);
+  border-radius: 12px;
 }
 
 .card-header {
@@ -420,5 +497,47 @@ const handleDelete = async (fileId: number) => {
 .header-actions {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.theme-switch {
+  margin-right: var(--space-12);
+}
+
+.filter-select {
+  width: 180px;
+  margin-right: var(--space-8);
+}
+
+/* 细节优化：圆角与层次感（作用到子组件需要使用深度选择器） */
+:deep(.el-table) {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+:deep(.el-table thead th) {
+  background: var(--table-header-bg);
+  color: var(--table-header-text);
+}
+
+:deep(.el-table .el-table__row:hover) {
+  background: var(--table-row-hover);
+}
+
+:deep(.el-tag) {
+  border-radius: 6px;
+}
+
+:deep(.el-button.is-round),
+:deep(.el-button--small) {
+  border-radius: 8px;
+}
+
+.op-btn {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.op-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 </style>

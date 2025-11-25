@@ -1,18 +1,23 @@
 <template>
   <div class="login-container">
-    <div class="login-box">
-      <div class="login-header">
-        <h1>AIReportLab IMS</h1>
-        <p>用户信息管理系统</p>
-      </div>
-      
-      <el-form
-        ref="loginFormRef"
-        :model="loginForm"
-        :rules="loginRules"
-        class="login-form"
-        @keyup.enter="handleLogin"
-      >
+  <div class="login-box">
+    <div class="login-header">
+      <h1>AIReportLab IMS</h1>
+      <p>用户信息管理系统</p>
+    </div>
+    <div class="theme-toggle">
+      <el-switch v-model="isDark" inline-prompt active-text="暗色" inactive-text="明亮" />
+    </div>
+    
+    <el-skeleton :loading="loading" animated>
+      <template #default>
+    <el-form
+      ref="loginFormRef"
+      :model="loginForm"
+      :rules="loginRules"
+      class="login-form"
+      @keyup.enter="handleLogin"
+    >
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
@@ -47,12 +52,15 @@
             size="large"
             :loading="loading"
             class="login-button"
+            :class="{ success: successPulse }"
             @click="handleLogin"
           >
             登录
           </el-button>
         </el-form-item>
       </el-form>
+      </template>
+    </el-skeleton>
       
       <div class="login-footer">
         <span>还没有账号？</span>
@@ -63,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -74,6 +82,8 @@ const userStore = useUserStore()
 
 const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
+const successPulse = ref(false)
+const isDark = ref(false)
 
 const loginForm = reactive({
   username: '',
@@ -98,7 +108,11 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        await userStore.login(loginForm.username, loginForm.password)
+        const ok = await userStore.login(loginForm.username, loginForm.password)
+        if (ok) {
+          successPulse.value = true
+          setTimeout(() => { successPulse.value = false }, 600)
+        }
       } finally {
         loading.value = false
       }
@@ -109,6 +123,17 @@ const handleLogin = async () => {
 const goToRegister = () => {
   router.push('/register')
 }
+
+onMounted(() => {
+  const theme = localStorage.getItem('theme')
+  isDark.value = theme === 'dark'
+  document.documentElement.classList.toggle('dark', isDark.value)
+})
+
+watch(isDark, (val) => {
+  document.documentElement.classList.toggle('dark', val)
+  localStorage.setItem('theme', val ? 'dark' : 'light')
+})
 </script>
 
 <style scoped>
@@ -118,15 +143,16 @@ const goToRegister = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand-gradient-start) 0%, var(--brand-gradient-end) 100%);
 }
 
 .login-box {
   width: 420px;
   padding: 40px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-md);
 }
 
 .login-header {
@@ -136,13 +162,13 @@ const goToRegister = () => {
 
 .login-header h1 {
   font-size: 28px;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 
 .login-header p {
   font-size: 14px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .login-form {
@@ -151,12 +177,30 @@ const goToRegister = () => {
 
 .login-button {
   width: 100%;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.login-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.login-button.success {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.theme-toggle {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-12);
 }
 
 .login-footer {
   text-align: center;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .login-footer span {

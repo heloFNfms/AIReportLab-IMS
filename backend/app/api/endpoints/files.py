@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Response
-from fastapi.responses import FileResponse as FastAPIFileResponse
+from fastapi.responses import FileResponse as FastAPIFileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -97,13 +97,22 @@ def download_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文件不存在或无权访问"
         )
-    
+
+    # 如果为 OSS 文件，返回签名URL重定向（浏览器将直接下载 OSS 文件）
+    if file.is_oss:
+        try:
+            signed_url = oss_service.get_file_url(file.oss_path)
+            return RedirectResponse(url=signed_url, status_code=status.HTTP_302_FOUND)
+        except HTTPException:
+            raise
+
+    # 本地文件下载
     if not os.path.exists(file.file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文件不存在"
         )
-    
+
     return FastAPIFileResponse(
         path=file.file_path,
         filename=file.filename,
