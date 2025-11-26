@@ -77,6 +77,10 @@
               <el-icon><Upload /></el-icon>
               上传文件
             </el-button>
+            <el-button type="success" class="upload-btn" @click="generatorDialogVisible = true">
+              <el-icon><DataAnalysis /></el-icon>
+              报告自动生成
+            </el-button>
           </div>
         </div>
 
@@ -284,6 +288,164 @@
         </div>
       </template>
     </el-dialog>
+    
+    <!-- 报告生成向导 -->
+    <el-dialog v-model="generatorDialogVisible" title="AI报告自动生成" width="720px" align-center>
+      <el-steps :active="generatorStep" finish-status="success" align-center style="margin-bottom: 16px">
+        <el-step title="选择模板" />
+        <el-step title="分析模板" />
+        <el-step title="选择数据" />
+        <el-step title="生成报告" />
+      </el-steps>
+
+      <div v-if="generatorStep === 0">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <span></span>
+          <el-button size="small" @click="fetchTemplateFiles">刷新</el-button>
+        </div>
+        <!-- 选中成功提示 -->
+        <el-alert v-if="selectedTemplateFile" type="success" :closable="false" style="margin-bottom:12px">
+          <template #title>
+            <div style="display:flex; align-items:center; gap:8px">
+              <el-icon><Check /></el-icon>
+              <span>已选择: {{ selectedTemplateFile.filename }}</span>
+            </div>
+          </template>
+        </el-alert>
+        <el-table 
+          :data="templateFiles" 
+          height="260" 
+          style="width:100%" 
+          v-loading="generatorLoading"
+          :row-class-name="getTemplateRowClass"
+        >
+          <el-table-column prop="filename" label="模板文件" min-width="240">
+            <template #default="{ row }">
+              <div style="display:flex; align-items:center; gap:8px">
+                <el-icon v-if="selectedTemplateFile?.id === row.id" color="#67c23a" :size="18">
+                  <Check />
+                </el-icon>
+                <span>{{ row.filename }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="file_size" label="大小" width="120">
+            <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+          </el-table-column>
+          <el-table-column label="选择" width="120">
+            <template #default="{ row }">
+              <el-button 
+                :type="selectedTemplateFile?.id === row.id ? 'success' : 'primary'" 
+                size="small" 
+                @click="selectTemplateFile(row)"
+              >
+                {{ selectedTemplateFile?.id === row.id ? '已选择' : '选择' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!generatorLoading && templateFiles.length === 0" description="暂无模板文件">
+          <el-button type="primary" @click="uploadDialogVisible = true">去上传</el-button>
+        </el-empty>
+      </div>
+
+      <div v-else-if="generatorStep === 1">
+        <el-alert v-if="!selectedTemplateFile" type="warning" title="请先选择模板文件" show-icon />
+        <div v-else>
+          <el-button type="primary" :loading="analyzing" @click="handleAnalyzeTemplate">分析模板</el-button>
+          <el-divider />
+          <pre v-if="templateStructure" style="max-height:260px;overflow:auto">{{ JSON.stringify(templateStructure, null, 2) }}</pre>
+        </div>
+      </div>
+
+      <div v-else-if="generatorStep === 2">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <span></span>
+          <el-button size="small" @click="fetchDataFiles">刷新</el-button>
+        </div>
+        <!-- 选中成功提示 -->
+        <el-alert v-if="selectedDataFile" type="success" :closable="false" style="margin-bottom:12px">
+          <template #title>
+            <div style="display:flex; align-items:center; gap:8px">
+              <el-icon><Check /></el-icon>
+              <span>已选择: {{ selectedDataFile.filename }}</span>
+            </div>
+          </template>
+        </el-alert>
+        <el-table 
+          :data="dataFiles" 
+          height="260" 
+          style="width:100%" 
+          v-loading="generatorLoading"
+          :row-class-name="getDataRowClass"
+        >
+          <el-table-column prop="filename" label="数据文件" min-width="240">
+            <template #default="{ row }">
+              <div style="display:flex; align-items:center; gap:8px">
+                <el-icon v-if="selectedDataFile?.id === row.id" color="#67c23a" :size="18">
+                  <Check />
+                </el-icon>
+                <span>{{ row.filename }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="file_size" label="大小" width="120">
+            <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+          </el-table-column>
+          <el-table-column label="选择" width="120">
+            <template #default="{ row }">
+              <el-button 
+                :type="selectedDataFile?.id === row.id ? 'success' : 'primary'" 
+                size="small" 
+                @click="selectDataFile(row)"
+              >
+                {{ selectedDataFile?.id === row.id ? '已选择' : '选择' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!generatorLoading && dataFiles.length === 0" description="暂无数据文件">
+          <el-button type="primary" @click="uploadDialogVisible = true">去上传</el-button>
+        </el-empty>
+      </div>
+
+      <div v-else>
+        <el-form label-width="120px" :model="generateParams">
+          <el-form-item label="报告标题">
+            <el-input v-model="generateParams.title" placeholder="可选" />
+          </el-form-item>
+          <el-form-item label="AI模型">
+            <el-select v-model="generateParams.ai_model" style="width:240px">
+              <el-option label="deepseek-chat" value="deepseek-chat" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="温度">
+            <el-slider v-model="generateParams.temperature" :min="0" :max="1" :step="0.1" style="width:240px" />
+          </el-form-item>
+        </el-form>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <el-tag type="info" v-if="selectedTemplateFile">模板：{{ selectedTemplateFile.filename }}</el-tag>
+            <el-tag type="success" v-if="selectedDataFile" style="margin-left:8px">数据：{{ selectedDataFile.filename }}</el-tag>
+          </div>
+          <el-button type="success" :disabled="!canStartGenerate" :loading="generating" @click="startGenerate">开始生成</el-button>
+        </div>
+        <el-divider />
+        <div v-if="currentReport">
+          <el-alert :title="`状态：${currentReportStatus?.status || 'pending'}`" type="info" show-icon />
+          <el-progress :percentage="currentReportStatus?.progress || 0" status="success" style="margin-top:8px" />
+          <div v-if="currentReportStatus?.status === 'completed'" style="max-height:240px; overflow:auto; margin-top:8px">
+            <pre>{{ currentReport.full_text }}</pre>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button v-if="generatorStep>0" @click="prevStep">上一步</el-button>
+        <el-button v-if="generatorStep<3" type="primary" @click="nextStep">下一步</el-button>
+        <el-button v-else @click="generatorDialogVisible=false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -295,6 +457,9 @@ import { formatFileSize, formatDateTime, getFileTypeLabel, getFileTypeTagType } 
 import type { FileType, FileInfo } from '@/types'
 import type { UploadInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
+import { analyzeTemplate, createTemplate } from '@/api/templates'
+import { generateReport, getReportStatus, getReport } from '@/api/reports'
+import { getFiles } from '@/api'
 import {
   Files,
   Document,
@@ -329,6 +494,23 @@ const pagedFiles = computed(() => {
 })
 const isDark = ref(false)
 
+const generatorDialogVisible = ref(false)
+const generatorStep = ref(0)
+const generatorLoading = ref(false)
+const templateFiles = ref<FileInfo[]>([])
+const dataFiles = ref<FileInfo[]>([])
+const selectedTemplateFile = ref<FileInfo | null>(null)
+const selectedDataFile = ref<FileInfo | null>(null)
+const createdTemplateId = ref<number | null>(null)
+const analyzing = ref(false)
+const templateStructure = ref<any>(null)
+const generating = ref(false)
+const currentReport = ref<any>(null)
+const currentReportStatus = ref<{status:string;progress:number} | null>(null)
+const generateParams = ref({ title: '', ai_model: 'deepseek-chat', temperature: 0.7 })
+
+ 
+
 const uploadForm = reactive<{
   file: File | null
   fileType: FileType | ''
@@ -355,7 +537,34 @@ onMounted(async () => {
   document.documentElement.classList.toggle('dark', isDark.value)
   await fileStore.fetchFiles()
   await fileStore.fetchStatistics()
+  // 预加载模板与数据文件（通过接口查询，避免前端侧过滤不齐）
+  templateFiles.value = await (getFiles('template' as any) as any)
+  dataFiles.value = await (getFiles('data' as any) as any)
   statsLoading.value = false
+})
+
+const fetchTemplateFiles = async () => {
+  try {
+    templateFiles.value = await (getFiles('template' as FileType) as any)
+  } catch {
+    ElMessage.error('加载模板文件失败')
+  }
+}
+
+const fetchDataFiles = async () => {
+  try {
+    dataFiles.value = await (getFiles('data' as FileType) as any)
+  } catch {
+    ElMessage.error('加载数据文件失败')
+  }
+}
+
+watch(generatorDialogVisible, async (open) => {
+  if (open) {
+    generatorLoading.value = true
+    await Promise.all([fetchTemplateFiles(), fetchDataFiles()])
+    generatorLoading.value = false
+  }
 })
 
 // 退出登录
@@ -407,6 +616,73 @@ const handleUpload = async () => {
     uploading.value = false
   }
 }
+
+const selectTemplateFile = (file: FileInfo) => { 
+  selectedTemplateFile.value = file
+  ElMessage.success(`已选择模板: ${file.filename}`)
+}
+
+const selectDataFile = (file: FileInfo) => { 
+  selectedDataFile.value = file
+  ElMessage.success(`已选择数据文件: ${file.filename}`)
+}
+
+// 模板表格行样式
+const getTemplateRowClass = ({ row }: { row: FileInfo }) => {
+  return selectedTemplateFile.value?.id === row.id ? 'selected-row' : ''
+}
+
+// 数据文件表格行样式
+const getDataRowClass = ({ row }: { row: FileInfo }) => {
+  return selectedDataFile.value?.id === row.id ? 'selected-row' : ''
+}
+
+const handleAnalyzeTemplate = async () => {
+  if (!selectedTemplateFile.value) return
+  analyzing.value = true
+  try {
+    const created = await createTemplate({ name: selectedTemplateFile.value!.filename, file_id: selectedTemplateFile.value!.id } as any)
+    createdTemplateId.value = (created as any).id
+    const tpl = await analyzeTemplate(createdTemplateId.value!)
+    templateStructure.value = (tpl as any).structure
+    ElMessage.success('模板分析完成')
+    nextStep()
+  } finally {
+    analyzing.value = false
+  }
+}
+
+const canStartGenerate = computed(() => !!selectedTemplateFile.value && !!selectedDataFile.value)
+const startGenerate = async () => {
+  if (!canStartGenerate.value) return
+  generating.value = true
+  try {
+    const created = await generateReport({
+      template_id: createdTemplateId.value!,
+      data_file_id: selectedDataFile.value!.id,
+      title: generateParams.value.title,
+      ai_model: generateParams.value.ai_model,
+      temperature: generateParams.value.temperature,
+    } as any)
+    currentReport.value = created
+    const timer = setInterval(async () => {
+      const status = await getReportStatus((created as any).id)
+      currentReportStatus.value = status as any
+      if ((status as any).status === 'completed' || (status as any).status === 'failed') {
+        clearInterval(timer)
+        if ((status as any).status === 'completed') {
+          const full = await getReport((created as any).id)
+          currentReport.value = full
+        }
+      }
+    }, 1500)
+  } finally {
+    generating.value = false
+  }
+}
+
+const nextStep = () => { generatorStep.value = Math.min(3, generatorStep.value + 1) }
+const prevStep = () => { generatorStep.value = Math.max(0, generatorStep.value - 1) }
 
 // 下载文件
 const handleDownload = async (file: FileInfo) => {
@@ -1088,6 +1364,27 @@ watch(isDark, (val) => {
   box-shadow: var(--shadow-sm);
 }
 
+/* 选中行的样式 */
+:deep(.selected-row) {
+  background: rgba(103, 194, 58, 0.1) !important;
+  border-left: 3px solid #67c23a;
+  transition: all 0.3s ease;
+}
+
+:deep(.selected-row:hover) {
+  background: rgba(103, 194, 58, 0.15) !important;
+  transform: scale(1.01);
+}
+
+:root.dark :deep(.selected-row) {
+  background: rgba(103, 194, 58, 0.15) !important;
+}
+
+:root.dark :deep(.selected-row:hover) {
+  background: rgba(103, 194, 58, 0.2) !important;
+}
+
+
 :deep(.upload-area .el-upload-dragger) {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-md);
@@ -1161,3 +1458,4 @@ watch(isDark, (val) => {
   }
 }
 </style>
+*** End of File

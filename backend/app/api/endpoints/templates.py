@@ -19,6 +19,10 @@ from app.schemas.template import (
 from app.core.deps import get_current_user
 from app.services.ai.template_analyzer import template_analyzer
 from datetime import datetime
+from app.services.file_service import get_file_by_id
+from app.models.file import File as FileModel
+from app.services.oss_service import oss_service
+import httpx
 
 router = APIRouter()
 
@@ -171,19 +175,51 @@ async def analyze_template(
     if template.status == TemplateStatus.COMPLETED and not force_reanalyze:
         return template
     
+    # 若无内容但有文件ID，则尝试从文件读取
     if not template.content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="模板内容为空，无法分析"
-        )
+        if template.file_id:
+            file = db.query(FileModel).filter(
+                FileModel.id == template.file_id,
+                FileModel.user_id == current_user.id
+            ).first()
+            if not file:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联文件不存在或无权访问")
+
+            try:
+                if file.is_oss and file.oss_path:
+                    # 直接获取签名URL并拉取内容
+                    signed_url = oss_service.get_file_url(file.oss_path)
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(signed_url)
+                        resp.raise_for_status()
+                        template.content = resp.text
+                else:
+                    # 读取本地文件内容
+                    path = file.file_path
+                    # 简单按扩展名处理 txt/docx
+                    if path and path.lower().endswith(".txt"):
+                        with open(path, "r", encoding="utf-8") as f:
+                            template.content = f.read()
+                    elif path and path.lower().endswith(".docx"):
+                        # 使用 analyzer 的 docx 提取辅助
+                        template.content = template_analyzer.extract_text_from_docx(path)
+                    else:
+                        # 其他类型按文本尝试读取
+                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                            template.content = f.read()
+            except Exception as e:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"读取模板文件失败: {str(e)}")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="模板内容为空，无法分析"
+            )
     
     # 更新状态为分析中
     template.status = TemplateStatus.ANALYZING
     db.commit()
     
     try:
-        # TODO: 调用AI分析服务
-        # 这里是框架代码，实际调用需要在后续实现
         analysis_result = await template_analyzer.analyze_template(
             template_content=template.content,
             template_name=template.name

@@ -56,7 +56,7 @@ class TemplateResponse(BaseModel):
     analyzed_at: Optional[datetime]
     
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class TemplateListResponse(BaseModel):
@@ -68,4 +68,4 @@ class TemplateListResponse(BaseModel):
     created_at: datetime
     
     class Config:
-        from_attributes = True
+        orm_mode = True

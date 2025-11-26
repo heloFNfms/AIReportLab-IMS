@@ -145,21 +145,62 @@ class OpenAIClient(AIClientBase):
             raise ValueError(f"AI返回的内容不是有效的JSON格式: {response}")
 
 
+class DeepSeekClient(AIClientBase):
+    """DeepSeek客户端实现（兼容OpenAI Chat Completions协议）"""
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if max_tokens:
+                payload["max_tokens"] = max_tokens
+            payload.update(kwargs)
+
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._build_headers(),
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+    async def structured_output(
+        self,
+        prompt: Dict[str, Any] | str,
+        schema: Dict[str, Any],
+        **kwargs
+    ) -> Dict[str, Any]:
+        messages = [
+            {"role": "system", "content": "你是一个专业的数据分析助手，请严格按照要求的JSON格式输出。"},
+            {"role": "user", "content": f"{prompt}\n\n请严格按照以下JSON Schema格式输出：\n{schema}"},
+        ]
+        text = await self.chat_completion(messages=messages, temperature=0.3, **kwargs)
+        import json
+        try:
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+            return json.loads(text)
+        except json.JSONDecodeError:
+            raise ValueError(f"AI返回的内容不是有效的JSON格式: {text}")
+
+
 # 工厂函数：根据配置创建AI客户端
 def get_ai_client() -> AIClientBase:
-    """
-    获取AI客户端实例
-    根据配置选择对应的客户端实现
-    """
     provider = settings.AI_PROVIDER.lower()
-    
     if provider == "openai":
         return OpenAIClient()
-    # 后续可以扩展其他提供商
-    # elif provider == "claude":
-    #     return ClaudeClient()
-    # elif provider == "deepseek":
-    #     return DeepSeekClient()
-    else:
-        # 默认使用OpenAI
-        return OpenAIClient()
+    if provider == "deepseek":
+        return DeepSeekClient()
+    return OpenAIClient()

@@ -53,7 +53,7 @@ class ReportResponse(BaseModel):
     completed_at: Optional[datetime]
     
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ReportListResponse(BaseModel):
@@ -66,7 +66,7 @@ class ReportListResponse(BaseModel):
     created_at: datetime
     
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ReportStatusResponse(BaseModel):

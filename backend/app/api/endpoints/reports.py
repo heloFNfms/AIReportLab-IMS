@@ -20,6 +20,13 @@ from app.schemas.report import (
 )
 from app.core.deps import get_current_user
 from app.services.ai.report_generator import report_generator
+from app.db.database import SessionLocal
+from app.models.file import File as FileModel
+from app.services.oss_service import oss_service
+import json
+import asyncio
+import httpx
+import os
 from datetime import datetime
 
 router = APIRouter()
@@ -81,13 +88,9 @@ async def generate_report(
     db.commit()
     db.refresh(db_report)
     
-    # TODO: 添加后台任务进行报告生成
-    # background_tasks.add_task(
-    #     generate_report_task,
-    #     report_id=db_report.id,
-    #     template_structure=template.structure,
-    #     custom_data=request.custom_data
-    # )
+    # 启动后台任务：分段生成报告
+    # 为提高可靠性，使用 BackgroundTasks 触发
+    background_tasks.add_task(asyncio.create_task, generate_report_task(db_report.id))
     
     return db_report
 
@@ -206,11 +209,98 @@ def delete_report(
     return {"message": "报告删除成功"}
 
 
-# TODO: 后台任务函数（在实际实现时启用）
-# async def generate_report_task(
-#     report_id: int,
-#     template_structure: dict,
-#     custom_data: dict = None
-# ):
-#     """后台任务：生成报告内容"""
-#     pass
+async def generate_report_task(report_id: int):
+    """后台任务：根据模板结构分段生成报告并更新进度"""
+    db = SessionLocal()
+    try:
+        report = db.query(Report).filter(Report.id == report_id).first()
+        if not report:
+            return
+        template = db.query(Template).filter(Template.id == report.template_id).first()
+        if not template or not template.structure:
+            report.status = ReportStatus.FAILED
+            report.error_message = "模板结构不存在"
+            db.commit()
+            return
+
+        report.status = ReportStatus.GENERATING
+        report.progress = 0
+        db.commit()
+
+        # 准备数据
+        data_dict = {}
+        data_req = []
+        try:
+            data_req = (template.structure or {}).get("数据要求", []) or []
+        except Exception:
+            data_req = []
+
+        if report.data_file_id:
+            file = db.query(FileModel).filter(FileModel.id == report.data_file_id).first()
+            file_text = ""
+            if file:
+                try:
+                    if file.is_oss and file.oss_path:
+                        # 使用签名URL直接读取内容
+                        signed_url = oss_service.get_file_url(file.oss_path)
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(signed_url)
+                            resp.raise_for_status()
+                            file_text = resp.text
+                    else:
+                        if file.file_path and os.path.exists(file.file_path):
+                            # 优先尝试 JSON
+                            if file.file_path.lower().endswith(".json"):
+                                with open(file.file_path, "r", encoding="utf-8") as f:
+                                    data_dict = json.load(f)
+                            else:
+                                with open(file.file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                    file_text = f.read()
+                except Exception:
+                    file_text = ""
+
+            # 若非JSON，尝试结构化抽取
+            if not data_dict and file_text:
+                try:
+                    data_dict = await report_generator.extract_data_from_file(file_text, data_req)
+                except Exception:
+                    data_dict = {}
+
+        # 分段生成
+        sections = (template.structure or {}).get("章节结构", []) or []
+        total = max(len(sections), 1)
+        content_map = {}
+        context = ""
+
+        for idx, section in enumerate(sections, start=1):
+            try:
+                text = await report_generator.generate_section(
+                    section_info=section,
+                    template_structure=template.structure,
+                    data=data_dict,
+                    context=context,
+                )
+                name = section.get("章节名", f"章节{idx}")
+                content_map[name] = text
+                context += f"\n\n{name}:\n{text[:500]}..."
+            except Exception as e:
+                report.status = ReportStatus.FAILED
+                report.error_message = f"章节生成失败: {str(e)}"
+                db.commit()
+                return
+
+            # 更新进度
+            report.progress = int(idx * 100 / total)
+            db.commit()
+
+        # 拼接全文
+        full_text_parts = []
+        for name, text in content_map.items():
+            full_text_parts.append(f"# {name}\n\n{text}\n")
+        report.content = content_map
+        report.full_text = "\n".join(full_text_parts)
+        report.status = ReportStatus.COMPLETED
+        report.completed_at = datetime.now()
+        db.commit()
+    finally:
+        db.close()
