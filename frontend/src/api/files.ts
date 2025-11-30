@@ -92,3 +92,13 @@ export const deleteFile = (fileId: number) => {
     method: 'delete',
   })
 }
+
+/**
+ * 预览文件内容
+ */
+export const previewFile = (fileId: number) => {
+  return request<import('@/types').FilePreviewResponse>({
+    url: `/files/${fileId}/preview`,
+    method: 'get',
+  })
+}

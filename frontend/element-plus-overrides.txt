@@ -1,0 +1,42 @@
+﻿/* Element Plus Dialog Overrides - Dark Glassmorphism */
+:root.dark :deep(.el-dialog) {
+  background: var(--bg-dialog);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-glass-lg);
+}
+
+:root.dark :deep(.el-dialog__header) {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: var(--glass-border);
+  backdrop-filter: blur(12px);
+}
+
+:root.dark :deep(.el-dialog__title) {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+:root.dark :deep(.el-dialog__body) {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+:root.dark :deep(.el-dialog__footer) {
+  background: rgba(255, 255, 255, 0.02);
+  border-top: var(--glass-border);
+  backdrop-filter: blur(12px);
+}
+
+:root.dark :deep(.el-input__wrapper) {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+:root.dark :deep(.el-select__wrapper) {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}

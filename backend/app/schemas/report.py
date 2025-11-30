@@ -75,3 +75,18 @@ class ReportStatusResponse(BaseModel):
     progress: int
     error_message: Optional[str]
     completed_at: Optional[datetime]
+
+
+class DraftSaveRequest(BaseModel):
+    template_id: int
+    title: Optional[str] = None
+    content: str
+    format: str = Field("markdown", description="草稿格式：markdown")
+
+
+class DraftResponse(BaseModel):
+    template_id: int
+    title: Optional[str] = None
+    content: str
+    format: str
+    updated_at: datetime

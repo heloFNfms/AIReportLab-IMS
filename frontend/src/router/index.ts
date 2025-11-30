@@ -23,6 +23,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Dashboard.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/editor/:templateId',
+    name: 'Editor',
+    component: () => import('@/views/Editor.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

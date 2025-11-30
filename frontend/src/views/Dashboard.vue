@@ -16,7 +16,7 @@
       </div>
       <div class="header-right">
         <div class="user-profile">
-          <el-avatar :size="32" class="user-avatar">{{ userStore.userInfo?.username?.charAt(0).toUpperCase() }}</el-avatar>
+          <el-avatar :size="32" class="user-avatar">{{ userStore.userInfo?.username?.charAt(0)?.toUpperCase() }}</el-avatar>
           <span class="username">{{ userStore.userInfo?.username }}</span>
         </div>
         <el-switch
@@ -77,9 +77,17 @@
               <el-icon><Upload /></el-icon>
               上传文件
             </el-button>
-            <el-button type="success" class="upload-btn" @click="generatorDialogVisible = true">
+            <el-button type="warning" class="upload-btn" @click="editorDialogVisible = true">
+              <el-icon><Edit /></el-icon>
+              开始撰写报告
+            </el-button>
+            <el-button v-if="!disableAIGeneration" type="success" class="upload-btn" @click="generatorDialogVisible = true">
               <el-icon><DataAnalysis /></el-icon>
               报告自动生成
+            </el-button>
+            <el-button type="info" class="upload-btn" @click="openReportsDialog">
+              <el-icon><DataAnalysis /></el-icon>
+              查看草稿与报告
             </el-button>
           </div>
         </div>
@@ -99,63 +107,35 @@
                 <template #default="{ row }">
                   <div class="filename-cell">
                     <div class="file-icon-wrapper" :class="getFileIconClass(row.file_type)">
-                      <el-icon class="file-icon"><Document /></el-icon>
+                      <el-icon v-if="row.file_type === 'template'"><Document /></el-icon>
+                      <el-icon v-else-if="row.file_type === 'data'"><Folder /></el-icon>
+                      <el-icon v-else><Files /></el-icon>
                     </div>
-                    <span>{{ row.filename }}</span>
+                    <div class="filename-text">
+                      <span>{{ row.filename }}</span>
+                      <el-tag v-if="row.is_oss" size="small" effect="plain" round class="oss-tag">OSS</el-tag>
+                    </div>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="存储位置" width="120">
-                <template #default="{ row }">
-                  <el-tag :type="row.is_oss ? 'success' : 'info'" size="small" effect="light" round class="location-tag">
-                    <el-icon style="margin-right: 4px;">
-                      <component :is="row.is_oss ? CloudUpload : Monitor" />
-                    </el-icon>
-                    {{ row.is_oss ? '云端' : '本地' }}
-                  </el-tag>
-                </template>
+              <el-table-column prop="file_size" label="大小" width="120">
+                <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
               </el-table-column>
-              <el-table-column label="文件类型" width="120">
-                <template #default="{ row }">
-                  <el-tag :type="getFileTypeTagType(row.file_type)" effect="plain" round class="type-tag">
-                    {{ getFileTypeLabel(row.file_type) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="文件大小" width="120">
-                <template #default="{ row }">
-                  <span class="file-size">{{ formatFileSize(row.file_size) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="上传时间" width="180">
+              <el-table-column prop="created_at" label="上传时间" width="180">
                 <template #default="{ row }">
                   <span class="upload-time">{{ formatDateTime(row.created_at) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="180" fixed="right">
+              <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }">
                   <div class="action-buttons">
-                    <el-button
-                      type="primary"
-                      link
-                      size="small"
-                      class="action-btn download-btn"
-                      @click="handleDownload(row)"
-                    >
+                    <el-button link class="action-btn download-btn" @click="handleDownload(row)">
                       <el-icon><Download /></el-icon>
-                      下载
                     </el-button>
-                    <el-popconfirm
-                      title="确定要删除此文件吗？"
-                      confirm-button-text="删除"
-                      cancel-button-text="取消"
-                      confirm-button-type="danger"
-                      @confirm="handleDelete(row.id)"
-                    >
+                    <el-popconfirm title="确定删除该文件吗？" @confirm="handleDelete(row.id)" width="200">
                       <template #reference>
-                        <el-button type="danger" link size="small" class="action-btn delete-btn">
+                        <el-button link class="action-btn delete-btn">
                           <el-icon><Delete /></el-icon>
-                          删除
                         </el-button>
                       </template>
                     </el-popconfirm>
@@ -167,283 +147,466 @@
             <div class="pagination-container">
               <el-pagination
                 background
-                :current-page="currentPage"
-                :page-size="pageSize"
-                :page-sizes="[10, 20, 50]"
                 layout="total, sizes, prev, pager, next"
                 :total="totalFiles"
-                @current-change="handlePageChange"
+                :page-sizes="[10, 20, 50, 100]"
+                :page-size="pageSize"
+                :current-page="currentPage"
                 @size-change="handleSizeChange"
+                @current-change="handlePageChange"
               />
             </div>
           </template>
-          <template v-else>
-            <div class="empty-state">
-              <el-empty description="暂无文件">
-                <template #image>
-                  <div class="empty-icon-wrapper">
-                    <el-icon class="empty-icon"><Folder /></el-icon>
-                  </div>
-                </template>
-                <el-button type="primary" @click="uploadDialogVisible = true" class="upload-btn">
-                  <el-icon><Upload /></el-icon>
-                  立即上传
-                </el-button>
-              </el-empty>
+          
+          <div v-else class="empty-state">
+            <div class="empty-content">
+              <div class="empty-icon-wrapper">
+                <el-icon class="empty-icon"><Folder /></el-icon>
+              </div>
+              <p>暂无文件，请上传</p>
             </div>
-          </template>
+          </div>
         </div>
       </div>
     </el-main>
 
-    <!-- 上传文件对话框 -->
-    <el-dialog
-      v-model="uploadDialogVisible"
-      title="上传文件"
-      width="500px"
-      class="upload-dialog"
-      align-center
-    >
-      <el-form :model="uploadForm" label-position="top">
-        <el-form-item label="存储方式" required>
-          <div class="storage-options">
-            <div 
-              class="storage-option" 
-              :class="{ active: uploadForm.storageType === 'local' }"
-              @click="uploadForm.storageType = 'local'"
-            >
-              <div class="storage-icon-wrapper local">
-                <el-icon><Monitor /></el-icon>
-              </div>
-              <div class="option-content">
-                <span class="option-title">本地存储</span>
-                <span class="option-desc">存储在服务器本地磁盘</span>
-              </div>
-              <div class="option-check" v-if="uploadForm.storageType === 'local'">
-                <el-icon><Check /></el-icon>
-              </div>
-            </div>
-            <div 
-              class="storage-option" 
-              :class="{ active: uploadForm.storageType === 'oss' }"
-              @click="uploadForm.storageType = 'oss'"
-            >
-              <div class="storage-icon-wrapper oss">
-                <el-icon><Cloudy /></el-icon>
-              </div>
-              <div class="option-content">
-                <span class="option-title">云端存储 (OSS)</span>
-                <span class="option-desc">阿里云OSS，访问更快</span>
-              </div>
-              <div class="option-check" v-if="uploadForm.storageType === 'oss'">
-                <el-icon><Check /></el-icon>
-              </div>
-            </div>
+    <!-- 上传对话框 -->
+    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="500px" align-center class="upload-dialog">
+      <div class="storage-options">
+        <div 
+          class="storage-option" 
+:class="{ active: !(userStore as any).uploadToOss }"
+          @click="userStore.setUploadToOss(false)"
+        >
+          <div class="storage-icon-wrapper local"><el-icon><Monitor /></el-icon></div>
+          <div class="option-content">
+            <span class="option-title">本地存储</span>
+            <span class="option-desc">存储在服务器本地磁盘</span>
           </div>
-        </el-form-item>
-        
-        <el-form-item label="文件类型" required>
-          <el-select v-model="uploadForm.fileType" placeholder="请选择文件类型" style="width: 100%">
-            <el-option label="模板文件" value="template" />
-            <el-option label="数据文件" value="data" />
-            <el-option label="其他文件" value="other" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="选择文件" required>
-          <el-upload
-            ref="uploadRef"
-            :auto-upload="false"
-            :limit="1"
-            :on-change="handleFileChange"
-            :on-exceed="handleExceed"
-            drag
-            class="upload-area"
-          >
-            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-            <div class="el-upload__text">
-              拖拽文件到此处或<em>点击上传</em>
-            </div>
-            <template #tip>
-              <div class="el-upload__tip">
-                文件大小不超过 10MB
-              </div>
-            </template>
-          </el-upload>
-        </el-form-item>
-      </el-form>
-      
+          <el-icon class="option-check" v-if="!userStore.uploadToOss"><Check /></el-icon>
+        </div>
+        <div 
+          class="storage-option" 
+          :class="{ active: userStore.uploadToOss }"
+          @click="userStore.setUploadToOss(true)"
+        >
+          <div class="storage-icon-wrapper oss"><el-icon><CloudUpload /></el-icon></div>
+          <div class="option-content">
+            <span class="option-title">阿里云 OSS</span>
+            <span class="option-desc">存储在云端对象存储</span>
+          </div>
+          <el-icon class="option-check" v-if="userStore.uploadToOss"><Check /></el-icon>
+        </div>
+      </div>
+
+      <el-upload
+        ref="uploadRef"
+        class="upload-area"
+        drag
+        action="#"
+        :http-request="handleUpload"
+        :auto-upload="false"
+        :limit="1"
+        :on-exceed="handleExceed"
+        :on-change="handleFileChange"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">
+          拖拽文件到此处或 <em>点击上传</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">
+            支持任意格式文件，单个文件不超过 500MB
+          </div>
+        </template>
+      </el-upload>
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="uploadDialogVisible = false">取消</el-button>
-          <el-button
-            type="primary"
-            :loading="uploading"
-            :disabled="!uploadForm.file || !uploadForm.fileType"
-            @click="handleUpload"
-            class="confirm-btn"
-          >
-            确定上传
+          <el-button type="primary" @click="submitUpload" :loading="uploading" class="confirm-btn">
+            {{ uploading ? '上传中...' : '开始上传' }}
           </el-button>
+        </div>
+      </template>
+    </el-dialog>
+    <el-dialog 
+      v-model="reportsDialogVisible" 
+      title="已生成报告" 
+      width="900px" 
+      align-center
+      class="generator-dialog"
+    >
+      <div class="generator-content">
+        <div class="step-header">
+          <el-select v-model="reportFilterStatus" style="width: 180px">
+            <el-option label="全部" value="all" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="生成中" value="generating" />
+            <el-option label="失败" value="failed" />
+          </el-select>
+          <el-button @click="fetchReports" :loading="reportsLoading">刷新</el-button>
+        </div>
+        <div class="dialog-table-container">
+          <el-table :data="filteredReports" v-loading="reportsLoading" class="custom-table" :header-cell-style="{ background: 'transparent' }">
+            <el-table-column prop="title" label="标题" min-width="280" />
+            <el-table-column prop="status" label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.status==='completed'?'success':row.status==='failed'?'danger':'primary'">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="进度" width="220">
+              <template #default="{ row }">
+                <el-progress :percentage="row.progress || 0" :status="row.status==='completed'?'success':''" />
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="创建时间" width="180" />
+            <el-table-column label="操作" width="220">
+              <template #default="{ row }">
+                <el-button link @click="viewReport(row)">查看</el-button>
+                <el-button link @click="downloadReportRow(row)">下载</el-button>
+                <el-popconfirm title="确认删除?" @confirm="deleteReportRow(row)">
+                  <template #reference>
+                    <el-button link type="danger">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="reportsDialogVisible=false; stopAllPolls()">关闭</el-button>
         </div>
       </template>
     </el-dialog>
     
     <!-- 报告生成向导 -->
-    <el-dialog v-model="generatorDialogVisible" title="AI报告自动生成" width="720px" align-center>
-      <el-steps :active="generatorStep" finish-status="success" align-center style="margin-bottom: 16px">
+    <el-dialog 
+      v-model="generatorDialogVisible" 
+      title="AI报告自动生成" 
+      width="800px" 
+      align-center
+      class="generator-dialog"
+    >
+      <el-steps :active="generatorStep" finish-status="success" align-center class="generator-steps">
         <el-step title="选择模板" />
         <el-step title="分析模板" />
         <el-step title="选择数据" />
         <el-step title="生成报告" />
       </el-steps>
 
-      <div v-if="generatorStep === 0">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-          <span></span>
-          <el-button size="small" @click="fetchTemplateFiles">刷新</el-button>
-        </div>
-        <!-- 选中成功提示 -->
-        <el-alert v-if="selectedTemplateFile" type="success" :closable="false" style="margin-bottom:12px">
-          <template #title>
-            <div style="display:flex; align-items:center; gap:8px">
-              <el-icon><Check /></el-icon>
-              <span>已选择: {{ selectedTemplateFile.filename }}</span>
+      <div class="generator-content">
+        <!-- Step 0: 选择模板 -->
+        <div v-if="generatorStep === 0" class="step-fade-in">
+          <div class="step-header">
+            <div class="info-tag template">
+              <el-icon><Document /></el-icon>
+              <span>请选择报告模板</span>
             </div>
-          </template>
-        </el-alert>
-        <el-table 
-          :data="templateFiles" 
-          height="260" 
-          style="width:100%" 
-          v-loading="generatorLoading"
-          :row-class-name="getTemplateRowClass"
-        >
-          <el-table-column prop="filename" label="模板文件" min-width="240">
-            <template #default="{ row }">
-              <div style="display:flex; align-items:center; gap:8px">
-                <el-icon v-if="selectedTemplateFile?.id === row.id" color="#67c23a" :size="18">
-                  <Check />
-                </el-icon>
-                <span>{{ row.filename }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="file_size" label="大小" width="120">
-            <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
-          </el-table-column>
-          <el-table-column label="选择" width="120">
-            <template #default="{ row }">
-              <el-button 
-                :type="selectedTemplateFile?.id === row.id ? 'success' : 'primary'" 
-                size="small" 
-                @click="selectTemplateFile(row)"
-              >
-                {{ selectedTemplateFile?.id === row.id ? '已选择' : '选择' }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!generatorLoading && templateFiles.length === 0" description="暂无模板文件">
-          <el-button type="primary" @click="uploadDialogVisible = true">去上传</el-button>
-        </el-empty>
-      </div>
-
-      <div v-else-if="generatorStep === 1">
-        <el-alert v-if="!selectedTemplateFile" type="warning" title="请先选择模板文件" show-icon />
-        <div v-else>
-          <el-button type="primary" :loading="analyzing" @click="handleAnalyzeTemplate">分析模板</el-button>
-          <el-divider />
-          <pre v-if="templateStructure" style="max-height:260px;overflow:auto">{{ JSON.stringify(templateStructure, null, 2) }}</pre>
-        </div>
-      </div>
-
-      <div v-else-if="generatorStep === 2">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-          <span></span>
-          <el-button size="small" @click="fetchDataFiles">刷新</el-button>
-        </div>
-        <!-- 选中成功提示 -->
-        <el-alert v-if="selectedDataFile" type="success" :closable="false" style="margin-bottom:12px">
-          <template #title>
-            <div style="display:flex; align-items:center; gap:8px">
-              <el-icon><Check /></el-icon>
-              <span>已选择: {{ selectedDataFile.filename }}</span>
-            </div>
-          </template>
-        </el-alert>
-        <el-table 
-          :data="dataFiles" 
-          height="260" 
-          style="width:100%" 
-          v-loading="generatorLoading"
-          :row-class-name="getDataRowClass"
-        >
-          <el-table-column prop="filename" label="数据文件" min-width="240">
-            <template #default="{ row }">
-              <div style="display:flex; align-items:center; gap:8px">
-                <el-icon v-if="selectedDataFile?.id === row.id" color="#67c23a" :size="18">
-                  <Check />
-                </el-icon>
-                <span>{{ row.filename }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="file_size" label="大小" width="120">
-            <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
-          </el-table-column>
-          <el-table-column label="选择" width="120">
-            <template #default="{ row }">
-              <el-button 
-                :type="selectedDataFile?.id === row.id ? 'success' : 'primary'" 
-                size="small" 
-                @click="selectDataFile(row)"
-              >
-                {{ selectedDataFile?.id === row.id ? '已选择' : '选择' }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!generatorLoading && dataFiles.length === 0" description="暂无数据文件">
-          <el-button type="primary" @click="uploadDialogVisible = true">去上传</el-button>
-        </el-empty>
-      </div>
-
-      <div v-else>
-        <el-form label-width="120px" :model="generateParams">
-          <el-form-item label="报告标题">
-            <el-input v-model="generateParams.title" placeholder="可选" />
-          </el-form-item>
-          <el-form-item label="AI模型">
-            <el-select v-model="generateParams.ai_model" style="width:240px">
-              <el-option label="deepseek-chat" value="deepseek-chat" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="温度">
-            <el-slider v-model="generateParams.temperature" :min="0" :max="1" :step="0.1" style="width:240px" />
-          </el-form-item>
-        </el-form>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <el-tag type="info" v-if="selectedTemplateFile">模板：{{ selectedTemplateFile.filename }}</el-tag>
-            <el-tag type="success" v-if="selectedDataFile" style="margin-left:8px">数据：{{ selectedDataFile.filename }}</el-tag>
+            <el-button size="small" circle @click="fetchTemplateFiles">
+              <el-icon><Files /></el-icon>
+            </el-button>
           </div>
-          <el-button type="success" :disabled="!canStartGenerate" :loading="generating" @click="startGenerate">开始生成</el-button>
+          
+          <el-alert v-if="selectedTemplateFile" type="success" :closable="false" class="selection-alert">
+            <template #title>
+              <div class="selected-info">
+                <el-icon><Check /></el-icon>
+                <span>已选择: <strong>{{ selectedTemplateFile.filename }}</strong></span>
+              </div>
+            </template>
+          </el-alert>
+
+          <div class="dialog-table-container">
+            <el-table 
+              :data="templateFiles" 
+              height="300" 
+              style="width:100%" 
+              v-loading="generatorLoading"
+              class="custom-table"
+              :header-cell-style="{ background: 'transparent' }"
+              :row-class-name="getTemplateRowClass"
+            >
+              <el-table-column prop="filename" label="模板文件" min-width="240">
+                <template #default="{ row }">
+                  <div class="filename-cell">
+                    <div class="file-icon-wrapper icon-template" style="width: 28px; height: 28px; font-size: 14px;">
+                      <el-icon><Document /></el-icon>
+                    </div>
+                    <span>{{ row.filename }}</span>
+                    <el-tag v-if="selectedTemplateFile?.id === row.id" type="success" size="small" effect="dark" style="margin-left: auto">已选</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="file_size" label="大小" width="100">
+                <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button 
+                    :type="selectedTemplateFile?.id === row.id ? 'success' : 'primary'" 
+                    size="small" 
+                    link
+                    @click="selectTemplateFile(row)"
+                  >
+                    {{ selectedTemplateFile?.id === row.id ? '已选择' : '选择' }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!generatorLoading && templateFiles.length === 0" description="暂无模板文件" :image-size="80">
+              <el-button type="primary" size="small" @click="uploadDialogVisible = true">去上传</el-button>
+            </el-empty>
+          </div>
         </div>
-        <el-divider />
-        <div v-if="currentReport">
-          <el-alert :title="`状态：${currentReportStatus?.status || 'pending'}`" type="info" show-icon />
-          <el-progress :percentage="currentReportStatus?.progress || 0" status="success" style="margin-top:8px" />
-          <div v-if="currentReportStatus?.status === 'completed'" style="max-height:240px; overflow:auto; margin-top:8px">
-            <pre>{{ currentReport.full_text }}</pre>
+
+        <!-- Step 1: 分析模板 -->
+        <div v-else-if="generatorStep === 1" class="step-fade-in">
+          <div v-if="!selectedTemplateFile" class="empty-state-small">
+            <el-alert type="warning" title="请先返回上一步选择模板文件" show-icon :closable="false" />
+          </div>
+          <div v-else class="analysis-container">
+            <div class="analysis-header">
+              <div class="file-info-card">
+                <div class="file-icon-wrapper icon-template">
+                  <el-icon><Document /></el-icon>
+                </div>
+                <div class="file-details">
+                  <div class="file-name">{{ selectedTemplateFile.filename }}</div>
+                  <div class="file-meta">准备进行结构分析</div>
+                </div>
+              </div>
+              <el-button type="primary" :loading="analyzing" @click="handleAnalyzeTemplate" class="analyze-btn">
+                <el-icon><DataAnalysis /></el-icon>
+                开始分析
+              </el-button>
+            </div>
+            
+            <div class="analysis-result" v-if="templateStructure">
+              <div class="result-label">模板结构预览</div>
+              <div class="code-block">
+                <pre>{{ JSON.stringify(templateStructure, null, 2) }}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: 选择数据 -->
+        <div v-else-if="generatorStep === 2" class="step-fade-in">
+          <div class="step-header">
+            <div class="info-tag data">
+              <el-icon><Folder /></el-icon>
+              <span>请选择数据文件</span>
+            </div>
+            <el-button size="small" circle @click="fetchDataFiles">
+              <el-icon><Files /></el-icon>
+            </el-button>
+          </div>
+
+          <el-alert v-if="selectedDataFile" type="success" :closable="false" class="selection-alert">
+            <template #title>
+              <div class="selected-info">
+                <el-icon><Check /></el-icon>
+                <span>已选择: <strong>{{ selectedDataFile.filename }}</strong></span>
+              </div>
+            </template>
+          </el-alert>
+          
+          <div class="dialog-table-container">
+            <el-table 
+              :data="dataFiles" 
+              height="300" 
+              style="width:100%" 
+              v-loading="generatorLoading"
+              class="custom-table"
+              :header-cell-style="{ background: 'transparent' }"
+              :row-class-name="getDataRowClass"
+            >
+              <el-table-column prop="filename" label="数据文件" min-width="240">
+                <template #default="{ row }">
+                  <div class="filename-cell">
+                    <div class="file-icon-wrapper icon-data" style="width: 28px; height: 28px; font-size: 14px;">
+                      <el-icon><Folder /></el-icon>
+                    </div>
+                    <span>{{ row.filename }}</span>
+                    <el-tag v-if="selectedDataFile?.id === row.id" type="success" size="small" effect="dark" style="margin-left: auto">已选</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="file_size" label="大小" width="100">
+                <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button 
+                    :type="selectedDataFile?.id === row.id ? 'success' : 'primary'" 
+                    size="small" 
+                    link
+                    @click="selectDataFile(row)"
+                  >
+                    {{ selectedDataFile?.id === row.id ? '已选择' : '选择' }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!generatorLoading && dataFiles.length === 0" description="暂无数据文件" :image-size="80">
+              <el-button type="primary" size="small" @click="uploadDialogVisible = true">去上传</el-button>
+            </el-empty>
+          </div>
+        </div>
+
+        <!-- Step 3: 生成报告 -->
+        <div v-else class="step-fade-in">
+          <div class="config-card">
+            <div class="card-header">生成配置</div>
+            <el-form label-width="100px" :model="generateParams" class="config-form">
+              <el-form-item label="报告标题">
+                <el-input v-model="generateParams.title" placeholder="请输入报告标题（可选）" />
+              </el-form-item>
+              <el-form-item label="AI 模型">
+                <el-select v-model="generateParams.ai_model" style="width: 100%">
+                  <el-option label="DeepSeek Chat" value="deepseek-chat" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="随机性">
+                <div style="display: flex; align-items: center; width: 100%; gap: 12px;">
+                  <el-slider v-model="generateParams.temperature" :min="0" :max="1" :step="0.1" style="flex: 1" />
+                  <span style="font-size: 12px; color: var(--text-tertiary)">{{ generateParams.temperature }}</span>
+                </div>
+              </el-form-item>
+            </el-form>
+            
+            <div class="summary-box">
+              <div class="summary-item">
+                <span class="label">模板文件:</span>
+                <span class="value">{{ selectedTemplateFile?.filename }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="label">数据文件:</span>
+                <span class="value">{{ selectedDataFile?.filename }}</span>
+              </div>
+            </div>
+
+            <div class="generate-action">
+              <el-button 
+                type="success" 
+                size="large" 
+                :disabled="!canStartGenerate" 
+                :loading="generating" 
+                @click="startGenerate"
+                class="generate-btn"
+              >
+                <el-icon class="el-icon--left"><MagicStick /></el-icon>
+                {{ generating ? '正在生成...' : '开始生成报告' }}
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="currentReport" class="report-preview-card">
+             <div class="status-header">
+               <span class="status-label">生成状态</span>
+               <el-tag :type="currentReportStatus?.status === 'completed' ? 'success' : 'primary'">
+                 {{ currentReportStatus?.status || 'Pending' }}
+               </el-tag>
+             </div>
+             <el-progress 
+               :percentage="currentReportStatus?.progress || 0" 
+               :status="currentReportStatus?.status === 'completed' ? 'success' : ''" 
+               :stroke-width="10"
+               striped
+               striped-flow
+             />
+             <div v-if="currentReportStatus?.status === 'completed'" class="report-result-box">
+                <pre>{{ currentReport.full_text }}</pre>
+             </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <el-button v-if="generatorStep>0" @click="prevStep">上一步</el-button>
-        <el-button v-if="generatorStep<3" type="primary" @click="nextStep">下一步</el-button>
-        <el-button v-else @click="generatorDialogVisible=false">关闭</el-button>
+        <div class="dialog-footer">
+          <el-button v-if="generatorStep > 0" @click="prevStep">上一步</el-button>
+          <el-button v-if="generatorStep < 3" type="primary" @click="nextStep">下一步</el-button>
+          <el-button v-else @click="generatorDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 选择模板进入编辑器对话框 -->
+    <el-dialog 
+      v-model="editorDialogVisible" 
+      title="选择模板开始撰写" 
+      width="700px" 
+      align-center
+      class="generator-dialog"
+    >
+      <div class="generator-content">
+        <div class="step-header">
+          <div class="info-tag template">
+            <el-icon><Document /></el-icon>
+            <span>请选择报告模板</span>
+          </div>
+          <el-button size="small" circle @click="fetchEditorTemplates">
+            <el-icon><Files /></el-icon>
+          </el-button>
+        </div>
+        
+        <el-alert v-if="selectedEditorTemplate" type="success" :closable="false" class="selection-alert">
+          <template #title>
+            <div class="selected-info">
+              <el-icon><Check /></el-icon>
+              <span>已选择: <strong>{{ selectedEditorTemplate.name }}</strong></span>
+            </div>
+          </template>
+        </el-alert>
+
+        <div class="dialog-table-container">
+          <el-table 
+            :data="editorTemplates" 
+            height="350" 
+            style="width:100%" 
+            v-loading="editorTemplatesLoading"
+            class="custom-table"
+            :header-cell-style="{ background: 'transparent' }"
+          >
+            <el-table-column prop="name" label="模板名称" min-width="240">
+              <template #default="{ row }">
+                <div class="filename-cell">
+                  <div class="file-icon-wrapper icon-template" style="width: 28px; height: 28px; font-size: 14px;">
+                    <el-icon><Document /></el-icon>
+                  </div>
+                  <span>{{ row.name }}</span>
+                  <el-tag v-if="selectedEditorTemplate?.id === row.id" type="success" size="small" effect="dark" style="margin-left: auto">已选</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'COMPLETED' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center">
+              <template #default="{ row }">
+                <el-button 
+                  :type="selectedEditorTemplate?.id === row.id ? 'success' : 'primary'" 
+                  size="small" 
+                  @click="goToEditor(row)"
+                >
+                  进入编辑器
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="!editorTemplatesLoading && editorTemplates.length === 0" description="暂无已分析的模板" :image-size="80">
+            <el-button type="primary" size="small" @click="generatorDialogVisible = true; editorDialogVisible = false">去分析模板</el-button>
+          </el-empty>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="editorDialogVisible = false">关闭</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -451,15 +614,16 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useFileStore } from '@/stores/file'
-import { formatFileSize, formatDateTime, getFileTypeLabel, getFileTypeTagType } from '@/utils/format'
+import { formatFileSize, formatDateTime } from '@/utils/format'
 import type { FileType, FileInfo } from '@/types'
 import type { UploadInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { analyzeTemplate, createTemplate } from '@/api/templates'
-import { generateReport, getReportStatus, getReport } from '@/api/reports'
-import { getFiles } from '@/api'
+import { analyzeTemplate, createTemplate, getTemplates } from '@/api/templates'
+import { getAppConfig } from '@/api/config'
+import { generateReport, getReportStatus, getReport, getReports, deleteReport } from '@/api/reports'
 import {
   Files,
   Document,
@@ -472,12 +636,16 @@ import {
   Cloudy,
   Monitor,
   SwitchButton,
-  Check
+  Check,
+  MagicStick,
+  Edit
 } from '@element-plus/icons-vue'
 const CloudUpload = Cloudy
 
 const userStore = useUserStore()
 const fileStore = useFileStore()
+const disableAIGeneration = ref(false)
+const router = useRouter()
 
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
@@ -492,8 +660,76 @@ const pagedFiles = computed(() => {
   const end = start + pageSize.value
   return fileStore.files.slice(start, end)
 })
-const isDark = ref(false)
 
+const reportCount = ref(0)
+const statItems = computed(() => [
+  { label: '总文件数', value: fileStore.statistics.total_files.toString(), icon: Files },
+  { label: '报告模板', value: fileStore.statistics.total_templates.toString(), icon: Document },
+  { label: '数据文件', value: fileStore.statistics.total_data_files.toString(), icon: Folder },
+  { label: '已生成报告', value: reportCount.value.toString(), icon: DataAnalysis },
+])
+
+onMounted(async () => {
+  statsLoading.value = true
+  await fileStore.fetchFiles()
+  await fileStore.fetchStatistics()
+  try {
+    const reports = await getReports()
+    reportCount.value = reports.length
+  } catch {}
+  try {
+    const cfg = await getAppConfig()
+    disableAIGeneration.value = !!cfg.featureFlags?.disableAIGeneration
+  } catch {}
+  statsLoading.value = false
+})
+
+const handleFilterChange = async () => {
+  currentPage.value = 1
+  await fileStore.fetchFiles((filterType.value || undefined) as FileType | undefined)
+}
+
+const inferFileType = (name: string): FileType => {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.json') || lower.endsWith('.txt')) return 'template'
+  if (lower.endsWith('.csv') || lower.endsWith('.xlsx')) return FileType.DATA
+  return FileType.OTHER
+}
+
+const handleUpload = async (options: any) => {
+  const { file } = options
+  try {
+    uploading.value = true
+    const fileType = inferFileType(file.name)
+    if (userStore.uploadToOss) {
+      await fileStore.uploadFileToOSS(file, fileType)
+    } else {
+      await fileStore.uploadFile(file, fileType)
+    }
+    ElMessage.success('上传成功')
+    uploadDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error('上传失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
+const handleExceed = (files: File[]) => {
+  uploadRef.value!.clearFiles()
+  const file = files[0]
+  uploadRef.value!.handleStart(file)
+}
+
+const handleFileChange = (file: any) => {
+  // 可以在这里添加文件校验逻辑
+}
+
+const submitUpload = () => {
+  uploadRef.value!.submit()
+}
+
+// Generator Logic
 const generatorDialogVisible = ref(false)
 const generatorStep = ref(0)
 const generatorLoading = ref(false)
@@ -501,168 +737,204 @@ const templateFiles = ref<FileInfo[]>([])
 const dataFiles = ref<FileInfo[]>([])
 const selectedTemplateFile = ref<FileInfo | null>(null)
 const selectedDataFile = ref<FileInfo | null>(null)
-const createdTemplateId = ref<number | null>(null)
 const analyzing = ref(false)
 const templateStructure = ref<any>(null)
 const generating = ref(false)
 const currentReport = ref<any>(null)
-const currentReportStatus = ref<{status:string;progress:number} | null>(null)
-const generateParams = ref({ title: '', ai_model: 'deepseek-chat', temperature: 0.7 })
+const currentReportStatus = ref<any>(null)
+const selectedTemplateId = ref<number | null>(null)
+const currentTemplate = ref<any>(null)
 
- 
+// Editor Entry Logic
+const editorDialogVisible = ref(false)
+const editorTemplates = ref<any[]>([])
+const editorTemplatesLoading = ref(false)
+const selectedEditorTemplate = ref<any>(null)
 
-const uploadForm = reactive<{
-  file: File | null
-  fileType: FileType | ''
-  storageType: 'local' | 'oss'
-}>({
-  file: null,
-  fileType: '',
-  storageType: 'local',
+const fetchEditorTemplates = async () => {
+  editorTemplatesLoading.value = true
+  try {
+    const list = await getTemplates()
+    // 去重逻辑：按名称分组，取最新的（ID最大的）
+    const map = new Map()
+    list.forEach((t: any) => {
+      if (!map.has(t.name) || t.id > map.get(t.name).id) {
+        map.set(t.name, t)
+      }
+    })
+    editorTemplates.value = Array.from(map.values()).sort((a, b) => b.id - a.id)
+  } catch (e) {
+    ElMessage.error('获取模板列表失败')
+  } finally {
+    editorTemplatesLoading.value = false
+  }
+}
+
+const goToEditor = (template: any) => {
+  const status = (template.status || '').toUpperCase()
+  if (status !== 'COMPLETED' && status !== 'PENDING') {
+    ElMessage.warning('该模板尚未分析完成，可能无法正常加载')
+  }
+  console.log('Navigating to editor for template:', template.id)
+  router.push(`/editor/${template.id}`)
+  editorDialogVisible.value = false
+}
+
+// 监听编辑器对话框打开
+watch(editorDialogVisible, (val) => {
+  if (val) {
+    fetchEditorTemplates()
+    selectedEditorTemplate.value = null
+  }
 })
 
-// 统计数据计算属性
-const statItems = computed(() => [
-  { icon: Files, value: fileStore.statistics.total_files, label: '总文件数' },
-  { icon: Document, value: fileStore.statistics.total_templates, label: '模板文件' },
-  { icon: Folder, value: fileStore.statistics.total_data_files, label: '数据文件' },
-  { icon: DataAnalysis, value: formatFileSize(fileStore.statistics.total_size), label: '总存储空间' }
-])
+const reportsDialogVisible = ref(false)
+const reportsLoading = ref(false)
+const reports = ref<any[]>([])
+const reportFilterStatus = ref<'all'|'completed'|'generating'|'failed'>('all')
+const filteredReports = computed(() => {
+  if (reportFilterStatus.value === 'all') return reports.value
+  return reports.value.filter((r: any) => r.status === reportFilterStatus.value)
+})
+const statusTimers: Record<number, any> = {}
+const openReportsDialog = async () => { reportsDialogVisible.value = true; await fetchReports() }
+const fetchReports = async () => {
+  reportsLoading.value = true
+  try {
+    const list = await getReports()
+    reports.value = list
+    list.forEach((r: any) => { if (r.status === 'generating') startPoll(r.id) })
+  } finally { reportsLoading.value = false }
+}
+const viewReport = async (row: any) => {
+  const full = await getReport(row.id)
+  currentReport.value = full
+  currentReportStatus.value = { status: full.status, progress: full.progress }
+}
+const deleteReportRow = async (row: any) => {
+  await deleteReport(row.id)
+  await fetchReports()
+}
+const downloadReportRow = async (row: any) => {
+  const full = await getReport(row.id)
+  const blob = new Blob([full.full_text || ''], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (full.title || '报告') + '.txt'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+const startPoll = (id: number) => {
+  if (statusTimers[id]) return
+  statusTimers[id] = setInterval(async () => {
+    const s = await getReportStatus(id)
+    const i = reports.value.findIndex((r: any) => r.id === id)
+    if (i >= 0) reports.value[i] = { ...reports.value[i], status: (s as any).status, progress: (s as any).progress }
+    if ((s as any).status === 'completed' || (s as any).status === 'failed') { clearInterval(statusTimers[id]); delete statusTimers[id] }
+  }, 2000)
+}
+const stopAllPolls = () => { Object.values(statusTimers).forEach((t) => clearInterval(t)); Object.keys(statusTimers).forEach((k) => delete statusTimers[+k]) }
 
-// 初始化数据
-onMounted(async () => {
-  statsLoading.value = true
-  const theme = localStorage.getItem('theme')
-  isDark.value = theme === 'dark'
-  document.documentElement.classList.toggle('dark', isDark.value)
-  await fileStore.fetchFiles()
-  await fileStore.fetchStatistics()
-  // 预加载模板与数据文件（通过接口查询，避免前端侧过滤不齐）
-  templateFiles.value = await (getFiles('template' as any) as any)
-  dataFiles.value = await (getFiles('data' as any) as any)
-  statsLoading.value = false
+const generateParams = reactive({
+  title: '',
+  ai_model: 'deepseek-chat',
+  temperature: 0.7
+})
+
+const canStartGenerate = computed(() => {
+  return selectedTemplateId.value && selectedDataFile.value
 })
 
 const fetchTemplateFiles = async () => {
+  generatorLoading.value = true
   try {
-    templateFiles.value = await (getFiles('template' as FileType) as any)
-  } catch {
-    ElMessage.error('加载模板文件失败')
+    // 实际应该调用后端筛选接口，这里简单演示
+    if (fileStore.files.length === 0) await fileStore.fetchFiles()
+    templateFiles.value = fileStore.files.filter(f => f.file_type === 'template' || f.filename.endsWith('.json') || f.filename.endsWith('.txt')) // 简单模拟
+  } finally {
+    generatorLoading.value = false
   }
 }
 
 const fetchDataFiles = async () => {
+  generatorLoading.value = true
   try {
-    dataFiles.value = await (getFiles('data' as FileType) as any)
-  } catch {
-    ElMessage.error('加载数据文件失败')
+    if (fileStore.files.length === 0) await fileStore.fetchFiles()
+    dataFiles.value = fileStore.files.filter(f => f.file_type === 'data' || f.filename.endsWith('.csv') || f.filename.endsWith('.xlsx'))
+  } finally {
+    generatorLoading.value = false
   }
 }
 
-watch(generatorDialogVisible, async (open) => {
-  if (open) {
-    generatorLoading.value = true
-    await Promise.all([fetchTemplateFiles(), fetchDataFiles()])
-    generatorLoading.value = false
+// 监听对话框打开，加载初始数据
+watch(generatorDialogVisible, (val) => {
+  if (val) {
+    fetchTemplateFiles()
+    fetchDataFiles()
+    if (!selectedTemplateFile.value) generatorStep.value = 0
   }
 })
 
-// 退出登录
-const handleLogout = () => {
-  userStore.logout()
-}
-
-// 筛选文件类型
-const handleFilterChange = async () => {
-  if (filterType.value) {
-    await fileStore.fetchFiles(filterType.value as FileType)
-  } else {
-    await fileStore.fetchFiles()
-  }
-}
-
-// 文件选择
-const handleFileChange = (file: any) => {
-  uploadForm.file = file.raw
-}
-
-// 文件超出限制
-const handleExceed = () => {
-  ElMessage.warning('只能上传一个文件')
-}
-
-// 上传文件
-const handleUpload = async () => {
-  if (!uploadForm.file || !uploadForm.fileType) {
-    ElMessage.warning('请选择文件类型和文件')
-    return
-  }
-
-  uploading.value = true
-  try {
-    // 根据存储方式选择不同的上传方法
-    if (uploadForm.storageType === 'oss') {
-      await fileStore.uploadFileToOSS(uploadForm.file, uploadForm.fileType as FileType)
-    } else {
-      await fileStore.uploadFile(uploadForm.file, uploadForm.fileType as FileType)
-    }
-    uploadDialogVisible.value = false
-    // 重置表单
-    uploadForm.file = null
-    uploadForm.fileType = ''
-    uploadForm.storageType = 'local'
-    uploadRef.value?.clearFiles()
-  } finally {
-    uploading.value = false
-  }
-}
-
-const selectTemplateFile = (file: FileInfo) => { 
+const selectTemplateFile = (file: FileInfo) => {
   selectedTemplateFile.value = file
-  ElMessage.success(`已选择模板: ${file.filename}`)
+  // 自动下一步
+  setTimeout(() => {
+    if (generatorStep.value === 0) nextStep()
+  }, 300)
 }
 
-const selectDataFile = (file: FileInfo) => { 
+const selectDataFile = (file: FileInfo) => {
   selectedDataFile.value = file
-  ElMessage.success(`已选择数据文件: ${file.filename}`)
+  setTimeout(() => {
+    if (generatorStep.value === 2) nextStep()
+  }, 300)
 }
 
-// 模板表格行样式
 const getTemplateRowClass = ({ row }: { row: FileInfo }) => {
-  return selectedTemplateFile.value?.id === row.id ? 'selected-row' : ''
+  return 'table-row-animate ' + (selectedTemplateFile.value?.id === row.id ? 'selected-row' : '')
 }
 
-// 数据文件表格行样式
 const getDataRowClass = ({ row }: { row: FileInfo }) => {
-  return selectedDataFile.value?.id === row.id ? 'selected-row' : ''
+  return 'table-row-animate ' + (selectedDataFile.value?.id === row.id ? 'selected-row' : '')
 }
 
 const handleAnalyzeTemplate = async () => {
   if (!selectedTemplateFile.value) return
   analyzing.value = true
   try {
-    const created = await createTemplate({ name: selectedTemplateFile.value!.filename, file_id: selectedTemplateFile.value!.id } as any)
-    createdTemplateId.value = (created as any).id
-    const tpl = await analyzeTemplate(createdTemplateId.value!)
-    templateStructure.value = (tpl as any).structure
+    if (!selectedTemplateId.value) {
+      const created = await createTemplate({
+        name: selectedTemplateFile.value.filename,
+        description: '由文件自动创建',
+        file_id: (selectedTemplateFile.value as any).id,
+      } as any)
+      currentTemplate.value = created
+      selectedTemplateId.value = (created as any).id
+    }
+    const analyzed = await analyzeTemplate(selectedTemplateId.value as number)
+    templateStructure.value = (analyzed as any).structure || analyzed
     ElMessage.success('模板分析完成')
-    nextStep()
+    router.push(`/editor/${selectedTemplateId.value}`)
+  } catch (e: any) {
+    ElMessage.error('模板分析失败')
   } finally {
     analyzing.value = false
   }
 }
 
-const canStartGenerate = computed(() => !!selectedTemplateFile.value && !!selectedDataFile.value)
 const startGenerate = async () => {
-  if (!canStartGenerate.value) return
+  if (!selectedTemplateId.value || !selectedDataFile.value) return
   generating.value = true
   try {
     const created = await generateReport({
-      template_id: createdTemplateId.value!,
-      data_file_id: selectedDataFile.value!.id,
-      title: generateParams.value.title,
-      ai_model: generateParams.value.ai_model,
-      temperature: generateParams.value.temperature,
+      template_id: selectedTemplateId.value as number,
+      data_file_id: selectedDataFile.value.id,
+      title: generateParams.title,
+      ai_model: generateParams.ai_model,
+      temperature: generateParams.temperature,
     } as any)
     currentReport.value = created
     const timer = setInterval(async () => {
@@ -683,6 +955,10 @@ const startGenerate = async () => {
 
 const nextStep = () => { generatorStep.value = Math.min(3, generatorStep.value + 1) }
 const prevStep = () => { generatorStep.value = Math.max(0, generatorStep.value - 1) }
+
+const handleLogout = () => {
+  userStore.logout()
+}
 
 // 下载文件
 const handleDownload = async (file: FileInfo) => {
@@ -727,10 +1003,13 @@ const getFileIconClass = (type: string) => {
   }
 }
 
+// 主题切换
+const isDark = ref(localStorage.getItem('theme') === 'dark')
+
 watch(isDark, (val) => {
   document.documentElement.classList.toggle('dark', val)
   localStorage.setItem('theme', val ? 'dark' : 'light')
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -762,11 +1041,11 @@ watch(isDark, (val) => {
 }
 
 .shape-1 {
-  top: -20%;
+  top: -10%;
   right: -10%;
-  width: 800px;
-  height: 800px;
-  background: var(--brand-gradient-start);
+  width: 500px;
+  height: 500px;
+  background: var(--brand-primary);
   animation: float 15s infinite ease-in-out;
 }
 
@@ -822,81 +1101,43 @@ watch(isDark, (val) => {
 }
 
 .header-left h2 {
-  margin: 0;
-  color: var(--text-primary);
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(90deg, var(--brand-primary-dark), var(--brand-primary));
+  background: linear-gradient(90deg, var(--text-primary), var(--brand-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-:root.dark .header-left h2 {
-  background: linear-gradient(90deg, #fff, #ccc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  margin: 0;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: var(--space-16);
+  gap: var(--space-24);
 }
 
 .user-profile {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 4px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  transition: all 0.3s ease;
-}
-
-.user-profile:hover {
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: var(--shadow-sm);
-}
-
-:root.dark .user-profile {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-:root.dark .user-profile:hover {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.user-avatar {
-  background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-light));
-  font-weight: 600;
-  border: 2px solid white;
+  gap: 10px;
 }
 
 .username {
-  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.logout-btn {
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
+.user-avatar {
+  background: var(--brand-primary-light);
+  color: white;
+  font-weight: 700;
 }
 
-.logout-btn:hover {
-  transform: rotate(90deg);
-  background-color: #fef2f2;
+.logout-btn {
+  margin-left: 8px;
 }
 
 .dashboard-main {
+  flex: 1;
   padding: var(--space-24);
   overflow-y: auto;
   z-index: 1;
@@ -1457,5 +1698,406 @@ watch(isDark, (val) => {
     grid-template-columns: 1fr;
   }
 }
+
+/* Generator Dialog Styles */
+.generator-content {
+  min-height: 400px;
+  padding: 20px 0;
+}
+
+.step-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.info-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+:root.dark .info-tag {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.info-tag.template { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+.info-tag.data { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+
+:root.dark .info-tag.template {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+:root.dark .info-tag.data {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.selection-alert {
+  margin-bottom: 16px;
+  border: 1px solid rgba(103, 194, 58, 0.2);
+  background: rgba(103, 194, 58, 0.1);
+}
+
+:root.dark .selection-alert {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  backdrop-filter: blur(12px);
+}
+
+.selected-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.dialog-table-container {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+:root.dark .dialog-table-container {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-small {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+/* Analysis Step */
+.analysis-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+:root.dark .analysis-header {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  border: var(--glass-border);
+}
+
+.file-info-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.file-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.analyze-btn {
+  padding: 10px 24px;
+  font-weight: 600;
+}
+
+.analysis-result {
+  background: #1e1e1e;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.result-label {
+  padding: 8px 16px;
+  background: #2d2d2d;
+  color: #aaa;
+  font-size: 12px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.code-block {
+  padding: 16px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.code-block pre {
+  margin: 0;
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+  color: #d4d4d4;
+  line-height: 1.5;
+}
+
+/* Config Step */
+.config-card {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 24px;
+}
+
+:root.dark .config-card {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(16px);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.card-header {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.config-form {
+  max-width: 600px;
+}
+
+.summary-box {
+  margin-top: 20px;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  gap: 24px;
+}
+
+:root.dark .summary-box {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-item .label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.summary-item .value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.generate-action {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.generate-btn {
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.3);
+  transition: all 0.3s ease;
+}
+
+.generate-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
+}
+
+.report-preview-card {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  border: 1px solid var(--border-color);
+}
+
+:root.dark .report-preview-card {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(16px);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.status-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.report-result-box {
+  margin-top: 16px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  max-height: 300px;
+  overflow: auto;
+}
+
+:root.dark .report-result-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: var(--glass-border);
+  backdrop-filter: blur(8px);
+}
+
+.report-result-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+:root.dark :deep(.el-progress-bar__outer) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
 </style>
-*** End of File
+
+<style>
+/* Generator Dialog - Global Overrides */
+.generator-dialog {
+  --el-dialog-bg-color: rgba(255, 255, 255, 0.9);
+  border-radius: 16px !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark .generator-dialog {
+  --el-dialog-bg-color: rgba(15, 23, 42, 0.85) !important; /* Deep Dark Slate */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Header */
+.generator-dialog .el-dialog__header {
+  margin-right: 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+html.dark .generator-dialog .el-dialog__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+html.dark .generator-dialog .el-dialog__title {
+  color: #f1f5f9;
+}
+
+/* Body */
+.generator-dialog .el-dialog__body {
+  padding: 0 24px 24px;
+}
+
+/* Footer */
+.generator-dialog .el-dialog__footer {
+  padding: 20px 24px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+html.dark .generator-dialog .el-dialog__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Steps */
+html.dark .generator-dialog .el-step__title.is-process { color: #38bdf8; font-weight: 600; }
+html.dark .generator-dialog .el-step__title.is-wait { color: #64748b; }
+html.dark .generator-dialog .el-step__title.is-success { color: #4ade80; }
+
+/* Table Transparency */
+html.dark .generator-dialog .el-table,
+html.dark .generator-dialog .el-table__expanded-cell {
+  background-color: transparent !important;
+  --el-table-bg-color: transparent !important;
+  --el-table-tr-bg-color: transparent !important;
+  --el-table-header-bg-color: rgba(255, 255, 255, 0.02) !important;
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.05) !important;
+  color: #e2e8f0;
+}
+
+html.dark .generator-dialog .el-table th,
+html.dark .generator-dialog .el-table tr,
+html.dark .generator-dialog .el-table td {
+  background-color: transparent !important;
+  border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Inputs & Form Items */
+html.dark .generator-dialog .el-form-item__label {
+  color: #cbd5e1;
+}
+html.dark .generator-dialog .el-input__wrapper,
+html.dark .generator-dialog .el-textarea__wrapper,
+html.dark .generator-dialog .el-select__wrapper {
+  background-color: rgba(15, 23, 42, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+html.dark .generator-dialog .el-input__inner {
+  color: #f8fafc;
+}
+
+/* Buttons in Dialog */
+html.dark .generator-dialog .el-button--default {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+html.dark .generator-dialog .el-button--default:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+</style>

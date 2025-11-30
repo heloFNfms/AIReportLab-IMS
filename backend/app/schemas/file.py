@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Any
 from datetime import datetime
 from app.models.file import FileType
 
@@ -29,3 +29,9 @@ class FileStatistics(BaseModel):
     total_templates: int
     total_data_files: int
     total_size: int  # 总大小（字节）
+
+class FilePreviewResponse(BaseModel):
+    mime_type: Optional[str] = None
+    preview_type: str  # json | csv | text
+    content: Optional[Any] = None  # 文本或JSON对象
+    csv_rows: Optional[List[List[str]]] = None  # 当预览类型为csv时返回部分行

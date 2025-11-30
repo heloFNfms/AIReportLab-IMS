@@ -16,7 +16,9 @@ from app.schemas.report import (
     ReportGenerateRequest,
     ReportResponse,
     ReportListResponse,
-    ReportStatusResponse
+    ReportStatusResponse,
+    DraftSaveRequest,
+    DraftResponse
 )
 from app.core.deps import get_current_user
 from app.services.ai.report_generator import report_generator
@@ -28,6 +30,7 @@ import asyncio
 import httpx
 import os
 from datetime import datetime
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -207,6 +210,53 @@ def delete_report(
     db.commit()
     
     return {"message": "报告删除成功"}
+
+
+@router.post("/drafts", response_model=DraftResponse)
+def save_draft(
+    draft: DraftSaveRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """保存草稿到本地 uploads/drafts/{user_id}/{template_id}.md"""
+    base_dir = os.path.join(settings.UPLOAD_FOLDER, "drafts", str(current_user.id))
+    os.makedirs(base_dir, exist_ok=True)
+    file_path = os.path.join(base_dir, f"{draft.template_id}.md")
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(draft.content)
+        return DraftResponse(
+            template_id=draft.template_id,
+            title=draft.title,
+            content=draft.content,
+            format=draft.format,
+            updated_at=datetime.now()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"保存草稿失败: {str(e)}")
+
+
+@router.get("/drafts/{template_id}", response_model=DraftResponse)
+def get_draft(
+    template_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """读取草稿，如果不存在返回404"""
+    base_dir = os.path.join(settings.UPLOAD_FOLDER, "drafts", str(current_user.id))
+    file_path = os.path.join(base_dir, f"{template_id}.md")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="草稿不存在")
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return DraftResponse(
+            template_id=template_id,
+            title=None,
+            content=content,
+            format="markdown",
+            updated_at=datetime.fromtimestamp(os.path.getmtime(file_path))
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"读取草稿失败: {str(e)}")
 
 
 async def generate_report_task(report_id: int):

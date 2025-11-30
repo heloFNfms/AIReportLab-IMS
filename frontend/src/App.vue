@@ -92,24 +92,30 @@
   --text-secondary: #cbd5e1;
   --text-tertiary: #94a3b8;
   
-  /* 背景色 */
-  --bg-page: #0f172a;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --bg-overlay: rgba(15, 23, 42, 0.8);
+  /* 背景色 - 增强深色 */
+  --bg-page: #0a0f1e;
+  --bg-card: rgba(15, 23, 42, 0.6);
+  --bg-overlay: rgba(10, 15, 30, 0.85);
+  --bg-dialog: rgba(15, 23, 42, 0.75);
+  --bg-dialog-content: rgba(30, 41, 59, 0.5);
   
   /* 边框和分割线 */
   --border-color: rgba(51, 65, 85, 0.6);
   --border-color-light: rgba(71, 85, 105, 0.6);
   
-  /* 阴影系统 */
+  /* 阴影系统 - 增强深度 */
   --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 25px rgba(96, 165, 250, 0.2);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-glass-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
   
-  /* 玻璃拟态 */
-  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 玻璃拟态 - 统一参数 */
+  --glass-blur: blur(20px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
   
   /* 表格样式 */
   --table-header-bg: rgba(30, 41, 59, 0.8);
