@@ -30,8 +30,6 @@ class ReportGenerateRequest(BaseModel):
     custom_data: Optional[Dict[str, Any]] = Field(None, description="自定义数据")
     title: Optional[str] = Field(None, description="报告标题")
     requirements: Optional[str] = Field(None, description="额外要求")
-    ai_model: Optional[str] = Field(None, description="指定AI模型")
-    temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0, description="生成温度")
 
 
 class ReportResponse(BaseModel):

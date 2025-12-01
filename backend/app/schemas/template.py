@@ -4,19 +4,8 @@
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
-
-
-class TemplateStructure(BaseModel):
-    """模板结构"""
-    报告名称: str
-    报告类型: str
-    章节结构: List[Dict[str, Any]]
-    风格要求: str
-    格式规则: Dict[str, Any]
-    数据要求: Optional[List[str]] = None
-    特殊说明: Optional[str] = None
 
 
 class TemplateCreate(BaseModel):
@@ -32,12 +21,6 @@ class TemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     content: Optional[str] = None
-
-
-class TemplateAnalyzeRequest(BaseModel):
-    """模板分析请求"""
-    template_id: int = Field(..., description="模板ID")
-    force_reanalyze: bool = Field(False, description="是否强制重新分析")
 
 
 class TemplateResponse(BaseModel):

@@ -34,11 +34,11 @@ async def upload_file_to_oss(
     # 上传到OSS
     oss_result = await oss_service.upload_file(file, current_user.id, file_type.value)
     
-    # 创建数据库记录
+    # 创建数据库记录 - file_type 需要转换为字符串值
     db_file = FileModel(
         filename=oss_result["original_filename"],
         file_path=oss_result["oss_path"],  # 存储OSS路径
-        file_type=file_type,
+        file_type=file_type.value if hasattr(file_type, 'value') else str(file_type),
         file_size=oss_result["file_size"],
         mime_type=oss_result["mime_type"],
         user_id=current_user.id,

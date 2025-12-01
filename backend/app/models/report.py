@@ -1,6 +1,6 @@
 """
 报告数据模型
-存储AI生成的报告及其元数据
+存储生成的报告及其元数据
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Enum
@@ -18,7 +18,7 @@ class ReportStatus(str, enum.Enum):
 
 
 class Report(Base):
-    """AI生成报告表"""
+    """报告表"""
     __tablename__ = "reports"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -48,8 +48,6 @@ class Report(Base):
     """
     generation_params示例：
     {
-        "ai_model": "gpt-4o-mini",
-        "temperature": 0.7,
         "custom_requirements": "强调数据可视化"
     }
     """

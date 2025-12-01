@@ -1,6 +1,6 @@
 """
 模板数据模型
-存储报告模板及其AI分析结果
+存储报告模板及其结构信息
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Enum
@@ -30,8 +30,8 @@ class Template(Base):
     # 模板内容
     content = Column(Text, nullable=True, comment="模板原始内容")
     
-    # AI分析结果（JSON格式）
-    structure = Column(JSON, nullable=True, comment="模板结构分析结果")
+    # 模板结构（JSON格式）
+    structure = Column(JSON, nullable=True, comment="模板结构信息")
     """
     structure示例：
     {

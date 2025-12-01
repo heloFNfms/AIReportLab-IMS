@@ -25,9 +25,9 @@ export interface Token {
 
 // 文件相关类型
 export enum FileType {
-  TEMPLATE = 'template',
-  DATA = 'data',
-  OTHER = 'other'
+  TEMPLATE = 'TEMPLATE',
+  DATA = 'DATA',
+  OTHER = 'OTHER'
 }
 
 export interface FileInfo {
@@ -48,7 +48,7 @@ export interface FileStatistics {
   total_files: number
   total_templates: number
   total_data_files: number
-  total_size: number
+  total_reports: number  // 生成报告数
 }
 
 // API响应类型

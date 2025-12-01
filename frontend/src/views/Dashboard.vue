@@ -69,9 +69,9 @@
               @change="handleFilterChange"
             >
               <el-option label="全部文件" value="" />
-              <el-option label="模板文件" value="template" />
-              <el-option label="数据文件" value="data" />
-              <el-option label="其他文件" value="other" />
+              <el-option label="模板文件" value="TEMPLATE" />
+              <el-option label="数据文件" value="DATA" />
+              <el-option label="其他文件" value="OTHER" />
             </el-select>
             <el-button type="primary" class="upload-btn" @click="uploadDialogVisible = true">
               <el-icon><Upload /></el-icon>
@@ -240,9 +240,9 @@
         
         <el-form-item label="文件类型" required>
           <el-select v-model="uploadForm.fileType" placeholder="请选择文件类型" style="width: 100%">
-            <el-option label="模板文件" value="template" />
-            <el-option label="数据文件" value="data" />
-            <el-option label="其他文件" value="other" />
+            <el-option label="模板文件" value="TEMPLATE" />
+            <el-option label="数据文件" value="DATA" />
+            <el-option label="其他文件" value="OTHER" />
           </el-select>
         </el-form-item>
         
@@ -344,7 +344,7 @@ const statItems = computed(() => [
   { icon: Files, value: fileStore.statistics.total_files, label: '总文件数' },
   { icon: Document, value: fileStore.statistics.total_templates, label: '模板文件' },
   { icon: Folder, value: fileStore.statistics.total_data_files, label: '数据文件' },
-  { icon: DataAnalysis, value: formatFileSize(fileStore.statistics.total_size), label: '总存储空间' }
+  { icon: DataAnalysis, value: fileStore.statistics.total_reports, label: '生成报告' }
 ])
 
 // 初始化数据

@@ -39,11 +39,11 @@ async def save_upload_file(upload_file: UploadFile, file_type: FileType, user_id
             detail=f"文件保存失败: {str(e)}"
         )
     
-    # 创建文件记录
+    # 创建文件记录 - file_type 需要转换为字符串值
     db_file = File(
         filename=upload_file.filename,
         file_path=file_path,
-        file_type=file_type,
+        file_type=file_type.value if hasattr(file_type, 'value') else str(file_type),
         file_size=len(content),
         mime_type=upload_file.content_type,
         user_id=user_id
@@ -57,7 +57,9 @@ async def save_upload_file(upload_file: UploadFile, file_type: FileType, user_id
 def get_user_files(db: Session, user_id: int, file_type: FileType = None):
     query = db.query(File).filter(File.user_id == user_id)
     if file_type:
-        query = query.filter(File.file_type == file_type)
+        # 使用字符串值进行比较
+        file_type_value = file_type.value if hasattr(file_type, 'value') else str(file_type)
+        query = query.filter(File.file_type == file_type_value)
     return query.all()
 
 def get_file_by_id(db: Session, file_id: int, user_id: int):
@@ -99,13 +101,17 @@ def delete_file(db: Session, file_id: int, user_id: int):
 def get_file_statistics(db: Session, user_id: int) -> FileStatistics:
     files = get_user_files(db, user_id)
     total_files = len(files)
-    total_templates = len([f for f in files if f.file_type == FileType.TEMPLATE])
-    total_data_files = len([f for f in files if f.file_type == FileType.DATA])
-    total_size = sum(f.file_size for f in files)
+    # 使用大小写不敏感的比较，兼容数据库中的大写或小写值
+    total_templates = len([f for f in files if f.file_type and f.file_type.upper() == "TEMPLATE"])
+    total_data_files = len([f for f in files if f.file_type and f.file_type.upper() == "DATA"])
+    
+    # 获取报告数量
+    from app.models.report import Report
+    total_reports = db.query(Report).filter(Report.user_id == user_id).count()
     
     return FileStatistics(
         total_files=total_files,
         total_templates=total_templates,
         total_data_files=total_data_files,
-        total_size=total_size
+        total_reports=total_reports
     )

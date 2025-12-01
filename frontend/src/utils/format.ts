@@ -43,9 +43,9 @@ export const formatDate = (dateString: string): string => {
  */
 export const getFileTypeLabel = (fileType: string): string => {
   const labels: Record<string, string> = {
-    template: '模板文件',
-    data: '数据文件',
-    other: '其他文件',
+    TEMPLATE: '模板文件',
+    DATA: '数据文件',
+    OTHER: '其他文件',
   }
   return labels[fileType] || fileType
 }
@@ -55,9 +55,9 @@ export const getFileTypeLabel = (fileType: string): string => {
  */
 export const getFileTypeTagType = (fileType: string): string => {
   const types: Record<string, string> = {
-    template: 'success',
-    data: 'primary',
-    other: 'info',
+    TEMPLATE: 'success',
+    DATA: 'primary',
+    OTHER: 'info',
   }
   return types[fileType] || 'info'
 }

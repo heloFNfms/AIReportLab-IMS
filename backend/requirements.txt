@@ -12,5 +12,3 @@ aiofiles==23.1.0
 pymysql==1.0.3
 email-validator==2.0.0
 oss2==2.18.0
-httpx==0.24.1
-python-docx==0.8.11

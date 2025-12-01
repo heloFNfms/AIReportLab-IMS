@@ -17,7 +17,7 @@ export const useFileStore = defineStore('file', () => {
     total_files: 0,
     total_templates: 0,
     total_data_files: 0,
-    total_size: 0,
+    total_reports: 0,
   })
   const loading = ref(false)
 
