@@ -23,6 +23,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Dashboard.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/template-select',
+    name: 'TemplateSelect',
+    component: () => import('@/views/TemplateSelect.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/draft-editor/:id',
+    name: 'DraftEditor',
+    component: () => import('@/views/DraftEditor.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/draft-box',
+    name: 'DraftBox',
+    component: () => import('@/views/DraftBox.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

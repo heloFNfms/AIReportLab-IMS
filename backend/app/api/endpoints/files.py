@@ -119,6 +119,81 @@ def download_file(
         media_type=file.mime_type or "application/octet-stream"
     )
 
+@router.get("/{file_id}/preview")
+def preview_file(
+    file_id: int,
+    max_lines: int = Query(default=500, description="最大预览行数"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """预览文件内容（仅支持文本类文件）"""
+    file = get_file_by_id(db, file_id, current_user.id)
+    if not file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="文件不存在或无权访问"
+        )
+    
+    # 支持预览的文件类型
+    text_mimes = ['text/', 'application/json', 'application/xml', 'application/csv']
+    text_extensions = ['.txt', '.csv', '.json', '.xml', '.md', '.log', '.yaml', '.yml', '.ini', '.conf']
+    
+    is_text = any(file.mime_type and file.mime_type.startswith(m) for m in text_mimes)
+    is_text_ext = any(file.filename.lower().endswith(ext) for ext in text_extensions)
+    
+    if not (is_text or is_text_ext):
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "preview_available": False,
+            "message": "该文件类型不支持预览",
+            "content": None
+        }
+    
+    try:
+        content = ""
+        if file.is_oss:
+            # OSS文件：下载内容
+            import requests
+            signed_url = oss_service.get_file_url(file.oss_path)
+            response = requests.get(signed_url, timeout=10)
+            response.encoding = 'utf-8'
+            content = response.text
+        else:
+            # 本地文件
+            if not os.path.exists(file.file_path):
+                raise HTTPException(status_code=404, detail="文件不存在")
+            with open(file.file_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = []
+                for i, line in enumerate(f):
+                    if i >= max_lines:
+                        lines.append(f"\n... (文件过长，仅显示前 {max_lines} 行)")
+                        break
+                    lines.append(line)
+                content = ''.join(lines)
+        
+        # 限制内容长度
+        if len(content) > 100000:
+            content = content[:100000] + "\n... (内容过长，已截断)"
+        
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "preview_available": True,
+            "content": content,
+            "file_size": file.file_size,
+            "mime_type": file.mime_type
+        }
+    except Exception as e:
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "preview_available": False,
+            "message": f"预览失败: {str(e)}",
+            "content": None
+        }
+
+
 @router.delete("/{file_id}")
 def remove_file(
     file_id: int,

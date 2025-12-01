@@ -77,6 +77,10 @@
               <el-icon><Upload /></el-icon>
               上传文件
             </el-button>
+            <el-button type="success" class="write-btn" @click="startWriting">
+              <el-icon><Edit /></el-icon>
+              报告撰写
+            </el-button>
           </div>
         </div>
 
@@ -289,6 +293,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useFileStore } from '@/stores/file'
 import { formatFileSize, formatDateTime, getFileTypeLabel, getFileTypeTagType } from '@/utils/format'
@@ -307,10 +312,12 @@ import {
   Cloudy,
   Monitor,
   SwitchButton,
-  Check
+  Check,
+  Edit
 } from '@element-plus/icons-vue'
 const CloudUpload = Cloudy
 
+const router = useRouter()
 const userStore = useUserStore()
 const fileStore = useFileStore()
 
@@ -361,6 +368,11 @@ onMounted(async () => {
 // 退出登录
 const handleLogout = () => {
   userStore.logout()
+}
+
+// 开始撰写报告
+const startWriting = () => {
+  router.push('/template-select')
 }
 
 // 筛选文件类型

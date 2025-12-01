@@ -92,3 +92,24 @@ export const deleteFile = (fileId: number) => {
     method: 'delete',
   })
 }
+
+/**
+ * 预览文件内容
+ */
+export interface FilePreview {
+  file_id: number
+  filename: string
+  preview_available: boolean
+  content: string | null
+  message?: string
+  file_size?: number
+  mime_type?: string
+}
+
+export const previewFile = (fileId: number, maxLines = 500) => {
+  return request<FilePreview>({
+    url: `/files/${fileId}/preview`,
+    method: 'get',
+    params: { max_lines: maxLines },
+  })
+}

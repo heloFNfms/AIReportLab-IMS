@@ -105,9 +105,12 @@ def get_file_statistics(db: Session, user_id: int) -> FileStatistics:
     total_templates = len([f for f in files if f.file_type and f.file_type.upper() == "TEMPLATE"])
     total_data_files = len([f for f in files if f.file_type and f.file_type.upper() == "DATA"])
     
-    # 获取报告数量
-    from app.models.report import Report
-    total_reports = db.query(Report).filter(Report.user_id == user_id).count()
+    # 获取报告数量（从草稿表中统计已完成的报告）
+    from app.models.draft import Draft
+    total_reports = db.query(Draft).filter(
+        Draft.user_id == user_id,
+        Draft.status == "completed"
+    ).count()
     
     return FileStatistics(
         total_files=total_files,
