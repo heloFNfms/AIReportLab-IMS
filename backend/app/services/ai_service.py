@@ -66,7 +66,9 @@ PROMPTS = {
     "custom": """{prompt}
 
 文本：
-{text}"""
+{text}""",
+
+    "ask": """{prompt}"""
 }
 
 
@@ -87,15 +89,27 @@ async def stream_ai_response(
         AI 生成的文本片段
     """
     # 构建 prompt
-    if action == "custom" and custom_prompt:
+    if action == "ask":
+        # 问答模式：custom_prompt 是用户的问题，text 是可选的上下文
+        if text and text.strip():
+            prompt = f"""请根据以下参考内容回答用户的问题。
+
+参考内容：
+{text}
+
+用户问题：
+{custom_prompt}"""
+        else:
+            prompt = custom_prompt or ""
+    elif action == "custom" and custom_prompt:
         prompt = PROMPTS["custom"].format(prompt=custom_prompt, text=text)
     elif action in PROMPTS:
         prompt = PROMPTS[action].format(text=text)
     else:
         raise ValueError(f"不支持的操作类型: {action}")
     
-    # 限制输入长度（约 2000 字）
-    if len(text) > 6000:
+    # 限制输入长度（约 2000 字），问答模式可以没有文本
+    if action != "ask" and len(text) > 6000:
         raise ValueError("文本过长，请选择较短的内容（建议 2000 字以内）")
     
     headers = {

@@ -41,6 +41,7 @@
               <el-dropdown-item command="explain">💡 解释说明</el-dropdown-item>
               <el-dropdown-item command="translate_en" divided>🇬🇧 翻译英文</el-dropdown-item>
               <el-dropdown-item command="translate_zh">🇨🇳 翻译中文</el-dropdown-item>
+              <el-dropdown-item command="ask" divided>💬 AI 问答</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -104,6 +105,9 @@
               <el-tooltip content="翻译中文" placement="top">
                 <el-button @click="handleFloatingAI('translate_zh')">🇨🇳</el-button>
               </el-tooltip>
+              <el-tooltip content="AI问答" placement="top">
+                <el-button @click="openAIChat">💬</el-button>
+              </el-tooltip>
             </el-button-group>
           </div>
         </transition>
@@ -159,6 +163,13 @@
       :action="aiAction"
       @apply="handleAIApply"
     />
+    
+    <!-- AI 问答组件 -->
+    <AIChat
+      v-model="showAIChatDialog"
+      :context="aiChatContext"
+      @insert="handleAIChatInsert"
+    />
   </div>
 </template>
 
@@ -174,6 +185,7 @@ import { formatDate, formatFileSize } from '@/utils/format'
 import { exportReport, type ExportFormat } from '@/utils/export'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AIAssistant from '@/components/AIAssistant.vue'
+import AIChat from '@/components/AIChat.vue'
 import type { AIAction } from '@/api/ai'
 import type { DraftVersion, FileInfo } from '@/types'
 
@@ -229,6 +241,10 @@ const showFloatingToolbar = ref(false)
 const selectedText = ref('')
 const floatingToolbarStyle = ref({ top: '0px', left: '0px' })
 
+// AI 问答相关
+const showAIChatDialog = ref(false)
+const aiChatContext = ref('')
+
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 const loadDraft = async () => {
@@ -254,8 +270,27 @@ const loadDataFiles = async () => {
 
 const loadFilePreview = async (fileId: number) => {
   previewLoading.value = true
-  try { previewData.value = await previewFile(fileId) }
-  catch { previewData.value = { file_id: fileId, filename: '', preview_available: false, content: null, message: '加载失败' } }
+  try { 
+    console.log('开始加载文件预览，文件ID:', fileId)
+    const result = await previewFile(fileId)
+    console.log('文件预览结果:', result)
+    previewData.value = result
+    
+    if (!result.preview_available) {
+      ElMessage.warning(result.message || '该文件类型不支持预览')
+    }
+  }
+  catch (error) { 
+    console.error('文件预览加载失败:', error)
+    previewData.value = { 
+      file_id: fileId, 
+      filename: '', 
+      preview_available: false, 
+      content: null, 
+      message: '加载失败，请检查网络连接' 
+    }
+    ElMessage.error('文件预览加载失败')
+  }
   finally { previewLoading.value = false }
 }
 
@@ -362,8 +397,31 @@ const handleFloatingAI = (action: AIAction) => {
   showFloatingToolbar.value = false
 }
 
+// 打开 AI 问答对话框
+const openAIChat = () => {
+  // 如果有选中文本，作为上下文
+  const currentSelection = markdownEditorRef.value?.getSelection()
+  aiChatContext.value = currentSelection?.trim() || selectedText.value || ''
+  showAIChatDialog.value = true
+  showFloatingToolbar.value = false
+}
+
+// AI 问答结果插入
+const handleAIChatInsert = (text: string) => {
+  if (markdownEditorRef.value) {
+    markdownEditorRef.value.insertValue('\n\n' + text + '\n\n')
+    handleContentChange()
+  }
+}
+
 // AI 助手功能（顶部菜单）
 const handleAIAction = async (action: AIAction) => {
+  // 问答模式单独处理
+  if (action === 'ask') {
+    openAIChat()
+    return
+  }
+  
   aiAction.value = action
   aiReplaceMode.value = false  // 顶部菜单不是替换模式
   
@@ -423,7 +481,8 @@ const actionNames: Record<AIAction, string> = {
   explain: '解释',
   translate_en: '翻译英文',
   translate_zh: '翻译中文',
-  custom: '处理'
+  custom: '处理',
+  ask: '问答'
 }
 
 // AI 结果应用
@@ -536,7 +595,19 @@ onBeforeUnmount(() => { if (autoSaveTimer) clearTimeout(autoSaveTimer); window.r
 .file-info-bar .file-name { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #409eff; }
 .preview-loading, .preview-error { padding: 16px; }
 .preview-content { flex: 1; overflow: auto; padding: 12px; background: #fafafa; }
-.preview-content pre { margin: 0; font-family: monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+.preview-content pre { 
+  margin: 0; 
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+  font-size: 13px; 
+  line-height: 1.6; 
+  white-space: pre-wrap; 
+  word-break: break-all;
+  color: #303133;
+  background: white;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+}
 
 .version-list { max-height: 400px; overflow-y: auto; }
 .version-item { padding: 12px; border-bottom: 1px solid #eee; }
