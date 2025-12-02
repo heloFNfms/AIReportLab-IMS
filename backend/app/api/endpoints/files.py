@@ -119,6 +119,37 @@ def download_file(
         media_type=file.mime_type or "application/octet-stream"
     )
 
+def extract_docx_text(file_path: str) -> str:
+    """从 Word 文档中提取文本"""
+    try:
+        from zipfile import ZipFile
+        from xml.etree import ElementTree
+        
+        with ZipFile(file_path) as docx:
+            # Word 文档的主要内容在 word/document.xml 中
+            xml_content = docx.read('word/document.xml')
+            tree = ElementTree.fromstring(xml_content)
+            
+            # 定义命名空间
+            namespaces = {
+                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+            }
+            
+            # 提取所有文本
+            paragraphs = []
+            for para in tree.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
+                texts = []
+                for text in para.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                    if text.text:
+                        texts.append(text.text)
+                if texts:
+                    paragraphs.append(''.join(texts))
+            
+            return '\n\n'.join(paragraphs)
+    except Exception as e:
+        raise Exception(f"无法读取 Word 文档: {str(e)}")
+
+
 @router.get("/{file_id}/preview")
 def preview_file(
     file_id: int,
@@ -126,7 +157,7 @@ def preview_file(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """预览文件内容（仅支持文本类文件）"""
+    """预览文件内容（支持文本类文件和 Word 文档）"""
     file = get_file_by_id(db, file_id, current_user.id)
     if not file:
         raise HTTPException(
@@ -134,43 +165,67 @@ def preview_file(
             detail="文件不存在或无权访问"
         )
     
+    filename_lower = file.filename.lower()
+    
     # 支持预览的文件类型
     text_mimes = ['text/', 'application/json', 'application/xml', 'application/csv']
-    text_extensions = ['.txt', '.csv', '.json', '.xml', '.md', '.log', '.yaml', '.yml', '.ini', '.conf']
+    text_extensions = ['.txt', '.csv', '.json', '.xml', '.md', '.log', '.yaml', '.yml', '.ini', '.conf', '.html', '.htm']
+    docx_extensions = ['.docx']
     
     is_text = any(file.mime_type and file.mime_type.startswith(m) for m in text_mimes)
-    is_text_ext = any(file.filename.lower().endswith(ext) for ext in text_extensions)
+    is_text_ext = any(filename_lower.endswith(ext) for ext in text_extensions)
+    is_docx = any(filename_lower.endswith(ext) for ext in docx_extensions)
     
-    if not (is_text or is_text_ext):
+    if not (is_text or is_text_ext or is_docx):
         return {
             "file_id": file_id,
             "filename": file.filename,
             "preview_available": False,
-            "message": "该文件类型不支持预览",
+            "message": f"该文件类型不支持预览（支持: txt, md, csv, json, xml, docx 等）",
             "content": None
         }
     
     try:
         content = ""
+        
         if file.is_oss:
-            # OSS文件：下载内容
+            # OSS文件：下载到临时文件
             import requests
+            import tempfile
+            
             signed_url = oss_service.get_file_url(file.oss_path)
-            response = requests.get(signed_url, timeout=10)
-            response.encoding = 'utf-8'
-            content = response.text
+            response = requests.get(signed_url, timeout=30)
+            
+            if is_docx:
+                # Word 文档需要保存到临时文件
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
+                    tmp.write(response.content)
+                    tmp_path = tmp.name
+                try:
+                    content = extract_docx_text(tmp_path)
+                finally:
+                    os.unlink(tmp_path)
+            else:
+                response.encoding = 'utf-8'
+                content = response.text
         else:
             # 本地文件
             if not os.path.exists(file.file_path):
                 raise HTTPException(status_code=404, detail="文件不存在")
-            with open(file.file_path, 'r', encoding='utf-8', errors='replace') as f:
-                lines = []
-                for i, line in enumerate(f):
-                    if i >= max_lines:
-                        lines.append(f"\n... (文件过长，仅显示前 {max_lines} 行)")
-                        break
-                    lines.append(line)
-                content = ''.join(lines)
+            
+            if is_docx:
+                # Word 文档
+                content = extract_docx_text(file.file_path)
+            else:
+                # 文本文件
+                with open(file.file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = []
+                    for i, line in enumerate(f):
+                        if i >= max_lines:
+                            lines.append(f"\n... (文件过长，仅显示前 {max_lines} 行)")
+                            break
+                        lines.append(line)
+                    content = ''.join(lines)
         
         # 限制内容长度
         if len(content) > 100000:

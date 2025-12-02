@@ -59,9 +59,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Document, Files, ArrowLeft, Folder } from '@element-plus/icons-vue'
 import { useFileStore } from '@/stores/file'
 import { useDraftStore } from '@/stores/draft'
+import { previewFile } from '@/api/files'
 import { formatFileSize } from '@/utils/format'
 import type { File } from '@/types'
 
@@ -91,10 +93,27 @@ const createDraft = async () => {
   
   try {
     creating.value = true
+    
+    // 如果选择了模板，先获取模板内容
+    let templateContent = ''
+    if (selectedTemplate.value) {
+      try {
+        const preview = await previewFile(selectedTemplate.value.id)
+        if (preview.preview_available && preview.content) {
+          templateContent = preview.content
+        } else {
+          ElMessage.warning('无法读取模板内容，将使用空白模板')
+        }
+      } catch (error) {
+        console.error('获取模板内容失败:', error)
+        ElMessage.warning('获取模板内容失败，将使用空白模板')
+      }
+    }
+    
     const draft = await draftStore.createDraft({
       title: createForm.value.title,
       template_file_id: selectedTemplate.value?.id,
-      content: ''
+      content: templateContent
     })
     router.push(`/draft-editor/${draft.id}`)
   } finally {
