@@ -436,6 +436,8 @@ const handleOutlineApply = async (outline: string) => {
   // 如果编辑器为空，直接设置
   if (!editorContent.value.trim()) {
     markdownEditorRef.value.setValue(outline)
+    // 手动更新 editorContent
+    editorContent.value = outline
     ElMessage.success('大纲已应用')
   } else {
     // 如果编辑器有内容，询问用户
@@ -452,11 +454,16 @@ const handleOutlineApply = async (outline: string) => {
       )
       // 用户选择替换
       markdownEditorRef.value.setValue(outline)
+      // 手动更新 editorContent
+      editorContent.value = outline
       ElMessage.success('大纲已替换')
     } catch (action) {
       if (action === 'cancel') {
         // 用户选择追加
+        const newContent = editorContent.value + '\n\n' + outline
         markdownEditorRef.value.insertValue('\n\n' + outline)
+        // 手动更新 editorContent
+        editorContent.value = newContent
         ElMessage.success('大纲已追加到末尾')
       }
       // action === 'close' 时不做任何操作
