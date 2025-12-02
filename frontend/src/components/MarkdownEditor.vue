@@ -19,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'change', value: string): void
+  (e: 'selection', text: string): void
 }>()
 
 const editorContainer = ref<HTMLElement>()
@@ -96,6 +97,10 @@ const initEditor = () => {
         })
         return null
       }
+    },
+    select: (value: string) => {
+      // 当用户选中文本时触发
+      emit('selection', value)
     }
   })
 }
@@ -144,13 +149,29 @@ const focus = () => {
   vditor?.focus()
 }
 
+// 获取选中的文本
+const getSelection = (): string => {
+  if (!vditor || !isEditorReady) return ''
+  return vditor.getSelection() || ''
+}
+
+// 替换选中的文本
+const replaceSelection = (text: string) => {
+  if (!vditor || !isEditorReady) return
+  // 删除选中内容并插入新内容
+  vditor.deleteValue()
+  vditor.insertValue(text)
+}
+
 defineExpose({
   getVditor,
   getHTML,
   getValue,
   setValue,
   insertValue,
-  focus
+  focus,
+  getSelection,
+  replaceSelection
 })
 
 onMounted(() => {

@@ -79,8 +79,34 @@
       </div>
     </div>
     <div class="editor-main" :class="{ 'with-data-panel': showDataPanel }">
-      <div class="editor-panel">
-        <MarkdownEditor ref="markdownEditorRef" v-model="editorContent" :height="editorHeight" mode="ir" placeholder="开始撰写..." @change="handleContentChange" />
+      <div class="editor-panel" ref="editorPanelRef">
+        <MarkdownEditor ref="markdownEditorRef" v-model="editorContent" :height="editorHeight" mode="ir" placeholder="开始撰写..." @change="handleContentChange" @selection="handleTextSelection" />
+        
+        <!-- 选中文本时的浮动 AI 工具栏 -->
+        <transition name="fade">
+          <div v-if="showFloatingToolbar && selectedText" class="floating-ai-toolbar" :style="floatingToolbarStyle">
+            <el-button-group size="small">
+              <el-tooltip content="润色" placement="top">
+                <el-button @click="handleFloatingAI('polish')">✨</el-button>
+              </el-tooltip>
+              <el-tooltip content="扩写" placement="top">
+                <el-button @click="handleFloatingAI('expand')">📝</el-button>
+              </el-tooltip>
+              <el-tooltip content="缩写" placement="top">
+                <el-button @click="handleFloatingAI('condense')">📉</el-button>
+              </el-tooltip>
+              <el-tooltip content="改写" placement="top">
+                <el-button @click="handleFloatingAI('rewrite')">🔄</el-button>
+              </el-tooltip>
+              <el-tooltip content="翻译英文" placement="top">
+                <el-button @click="handleFloatingAI('translate_en')">🇬🇧</el-button>
+              </el-tooltip>
+              <el-tooltip content="翻译中文" placement="top">
+                <el-button @click="handleFloatingAI('translate_zh')">🇨🇳</el-button>
+              </el-tooltip>
+            </el-button-group>
+          </div>
+        </transition>
       </div>
       <div v-if="showDataPanel" class="data-panel">
         <div class="data-panel-header">
@@ -195,6 +221,13 @@ const previewLoading = ref(false)
 const showAIDialog = ref(false)
 const aiSelectedText = ref('')
 const aiAction = ref<AIAction>('polish')
+const aiReplaceMode = ref(false)  // 是否替换选中文本模式
+
+// 浮动工具栏相关
+const editorPanelRef = ref<HTMLElement>()
+const showFloatingToolbar = ref(false)
+const selectedText = ref('')
+const floatingToolbarStyle = ref({ top: '0px', left: '0px' })
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -288,9 +321,60 @@ const handleExit = async () => {
   }
 }
 
-// AI 助手功能
+// 处理文本选中事件
+const handleTextSelection = (text: string) => {
+  if (text && text.trim().length > 0) {
+    selectedText.value = text.trim()
+    showFloatingToolbar.value = true
+    
+    // 计算浮动工具栏位置
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      const panelRect = editorPanelRef.value?.getBoundingClientRect()
+      
+      if (panelRect) {
+        floatingToolbarStyle.value = {
+          top: `${rect.top - panelRect.top - 45}px`,
+          left: `${rect.left - panelRect.left + rect.width / 2}px`
+        }
+      }
+    }
+  } else {
+    // 延迟隐藏，避免点击工具栏时立即消失
+    setTimeout(() => {
+      if (!selectedText.value) {
+        showFloatingToolbar.value = false
+      }
+    }, 200)
+  }
+}
+
+// 浮动工具栏 AI 操作
+const handleFloatingAI = (action: AIAction) => {
+  if (!selectedText.value) return
+  
+  aiAction.value = action
+  aiSelectedText.value = selectedText.value
+  aiReplaceMode.value = true  // 标记为替换模式
+  showAIDialog.value = true
+  showFloatingToolbar.value = false
+}
+
+// AI 助手功能（顶部菜单）
 const handleAIAction = async (action: AIAction) => {
   aiAction.value = action
+  aiReplaceMode.value = false  // 顶部菜单不是替换模式
+  
+  // 先检查是否有选中的文本
+  const currentSelection = markdownEditorRef.value?.getSelection()
+  if (currentSelection && currentSelection.trim().length > 0) {
+    aiSelectedText.value = currentSelection.trim()
+    aiReplaceMode.value = true  // 有选中文本时使用替换模式
+    showAIDialog.value = true
+    return
+  }
   
   // 续写操作：直接使用最后500字作为上下文
   if (action === 'continue') {
@@ -350,12 +434,19 @@ const handleAIApply = (result: string) => {
   if (aiAction.value === 'continue') {
     markdownEditorRef.value.insertValue('\n\n' + result)
     ElMessage.success('续写内容已添加到文末')
+  } else if (aiReplaceMode.value) {
+    // 替换模式：替换选中的文本
+    markdownEditorRef.value.replaceSelection(result)
+    ElMessage.success('已替换选中文本')
   } else {
     // 其他操作：插入到光标位置
     markdownEditorRef.value.insertValue('\n\n' + result + '\n\n')
     ElMessage.success('AI 生成的内容已插入，请根据需要调整')
   }
   
+  // 重置状态
+  selectedText.value = ''
+  aiReplaceMode.value = false
   handleContentChange()
 }
 
@@ -406,7 +497,34 @@ onBeforeUnmount(() => { if (autoSaveTimer) clearTimeout(autoSaveTimer); window.r
 .save-status.status-unsaved { color: #e6a23c; background: #fdf6ec; }
 
 .editor-main { flex: 1; display: flex; gap: 16px; padding: 16px; overflow: hidden; }
-.editor-panel { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+.editor-panel { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; position: relative; }
+
+/* 浮动 AI 工具栏 */
+.floating-ai-toolbar {
+  position: absolute;
+  z-index: 1000;
+  transform: translateX(-50%);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 4px;
+}
+.floating-ai-toolbar .el-button-group .el-button {
+  padding: 6px 10px;
+  font-size: 14px;
+}
+.floating-ai-toolbar::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid white;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-5px); }
 
 .data-panel { width: 380px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
 .data-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e4e7ed; background: #fafafa; }
