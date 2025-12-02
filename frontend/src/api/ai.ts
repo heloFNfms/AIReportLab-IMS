@@ -1,6 +1,6 @@
 import request from './request'
 
-export type AIAction = 'polish' | 'expand' | 'condense' | 'rewrite' | 'continue' | 'explain' | 'translate_en' | 'translate_zh' | 'custom' | 'ask'
+export type AIAction = 'polish' | 'expand' | 'condense' | 'rewrite' | 'continue' | 'explain' | 'translate_en' | 'translate_zh' | 'custom' | 'ask' | 'outline'
 
 export interface AIRequest {
   text: string

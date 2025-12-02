@@ -68,7 +68,22 @@ PROMPTS = {
 文本：
 {text}""",
 
-    "ask": """{prompt}"""
+    "ask": """{prompt}""",
+
+    "outline": """请根据以下信息生成一份详细的报告大纲。
+
+报告主题：{topic}
+报告类型：{report_type}
+目标受众：{audience}
+{additional_info}
+
+要求：
+1. 生成清晰的多级标题结构（使用 Markdown 格式）
+2. 每个章节包含简要说明
+3. 结构合理，逻辑清晰
+4. 适合 {report_type} 类型的报告
+
+请直接输出 Markdown 格式的大纲，不要添加任何解释。"""
 }
 
 
@@ -101,6 +116,26 @@ async def stream_ai_response(
 {custom_prompt}"""
         else:
             prompt = custom_prompt or ""
+    elif action == "outline":
+        # 大纲生成模式：custom_prompt 包含 JSON 格式的参数
+        import json
+        try:
+            params = json.loads(custom_prompt) if custom_prompt else {}
+            topic = params.get('topic', '')
+            report_type = params.get('report_type', '通用报告')
+            audience = params.get('audience', '一般读者')
+            additional_requirements = params.get('additional_requirements', '')
+            
+            additional_info = f"其他要求：{additional_requirements}" if additional_requirements else ""
+            
+            prompt = PROMPTS["outline"].format(
+                topic=topic,
+                report_type=report_type,
+                audience=audience,
+                additional_info=additional_info
+            )
+        except:
+            raise ValueError("大纲生成参数格式错误")
     elif action == "custom" and custom_prompt:
         prompt = PROMPTS["custom"].format(prompt=custom_prompt, text=text)
     elif action in PROMPTS:

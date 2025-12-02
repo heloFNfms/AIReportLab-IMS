@@ -27,6 +27,11 @@
       </div>
       <div class="header-right">
         <!-- AI 助手下拉菜单 -->
+        <!-- 大纲生成按钮 -->
+        <el-button @click="showOutlineGenerator = true" type="primary" size="small">
+          <el-icon><List /></el-icon> 生成大纲
+        </el-button>
+        
         <el-dropdown @command="handleAIAction" trigger="click">
           <el-button size="small" type="warning">
             <el-icon><MagicStick /></el-icon> AI助手<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -170,6 +175,12 @@
       :context="aiChatContext"
       @insert="handleAIChatInsert"
     />
+    
+    <!-- 大纲生成器 -->
+    <OutlineGenerator
+      v-model="showOutlineGenerator"
+      @apply="handleOutlineApply"
+    />
   </div>
 </template>
 
@@ -177,7 +188,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Clock, Document, ArrowDown, View, FolderOpened, Close, Check, Download, Loading, CircleCheck, CircleClose, Warning, CopyDocument, MagicStick } from '@element-plus/icons-vue'
+import { ArrowLeft, Clock, Document, ArrowDown, View, FolderOpened, Close, Check, Download, Loading, CircleCheck, CircleClose, Warning, CopyDocument, MagicStick, List } from '@element-plus/icons-vue'
 import { useDraftStore } from '@/stores/draft'
 import { useFileStore } from '@/stores/file'
 import { previewFile, type FilePreview } from '@/api/files'
@@ -186,6 +197,7 @@ import { exportReport, type ExportFormat } from '@/utils/export'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import AIAssistant from '@/components/AIAssistant.vue'
 import AIChat from '@/components/AIChat.vue'
+import OutlineGenerator from '@/components/OutlineGenerator.vue'
 import type { AIAction } from '@/api/ai'
 import type { DraftVersion, FileInfo } from '@/types'
 
@@ -244,6 +256,9 @@ const floatingToolbarStyle = ref({ top: '0px', left: '0px' })
 // AI 问答相关
 const showAIChatDialog = ref(false)
 const aiChatContext = ref('')
+
+// 大纲生成相关
+const showOutlineGenerator = ref(false)
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -414,6 +429,42 @@ const handleAIChatInsert = (text: string) => {
   }
 }
 
+// 大纲应用到编辑器
+const handleOutlineApply = async (outline: string) => {
+  if (!markdownEditorRef.value) return
+  
+  // 如果编辑器为空，直接设置
+  if (!editorContent.value.trim()) {
+    markdownEditorRef.value.setValue(outline)
+    ElMessage.success('大纲已应用')
+  } else {
+    // 如果编辑器有内容，询问用户
+    try {
+      await ElMessageBox.confirm(
+        '编辑器中已有内容，是否要替换？',
+        '确认操作',
+        {
+          confirmButtonText: '替换',
+          cancelButtonText: '追加到末尾',
+          distinguishCancelAndClose: true,
+          type: 'warning'
+        }
+      )
+      // 用户选择替换
+      markdownEditorRef.value.setValue(outline)
+      ElMessage.success('大纲已替换')
+    } catch (action) {
+      if (action === 'cancel') {
+        // 用户选择追加
+        markdownEditorRef.value.insertValue('\n\n' + outline)
+        ElMessage.success('大纲已追加到末尾')
+      }
+      // action === 'close' 时不做任何操作
+    }
+  }
+  handleContentChange()
+}
+
 // AI 助手功能（顶部菜单）
 const handleAIAction = async (action: AIAction) => {
   // 问答模式单独处理
@@ -482,7 +533,8 @@ const actionNames: Record<AIAction, string> = {
   translate_en: '翻译英文',
   translate_zh: '翻译中文',
   custom: '处理',
-  ask: '问答'
+  ask: '问答',
+  outline: '大纲生成'
 }
 
 // AI 结果应用
@@ -541,85 +593,354 @@ onBeforeUnmount(() => { if (autoSaveTimer) clearTimeout(autoSaveTimer); window.r
 
 
 <style scoped>
-.draft-editor { height: 100vh; display: flex; flex-direction: column; background: #f5f7fa; overflow: hidden; }
-.editor-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: white; border-bottom: 1px solid #e4e7ed; flex-shrink: 0; }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.header-left .el-divider { height: 24px; }
-.draft-info h3 { margin: 0 0 2px 0; color: #303133; font-size: 15px; font-weight: 600; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.meta-info { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #909399; }
-.header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.draft-editor { 
+  height: 100vh; 
+  display: flex; 
+  flex-direction: column; 
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+  overflow: hidden; 
+}
 
-.save-status { display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
-.save-status.status-saving { color: #409eff; }
-.save-status.status-saved { color: #67c23a; background: #f0f9eb; }
-.save-status.status-error { color: #f56c6c; background: #fef0f0; }
-.save-status.status-unsaved { color: #e6a23c; background: #fdf6ec; }
+.editor-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 12px 20px; 
+  background: linear-gradient(to right, #ffffff 0%, #fafbfc 100%);
+  border-bottom: 1px solid #e4e7ed; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  flex-shrink: 0; 
+}
 
-.editor-main { flex: 1; display: flex; gap: 16px; padding: 16px; overflow: hidden; }
-.editor-panel { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; position: relative; }
+.header-left { 
+  display: flex; 
+  align-items: center; 
+  gap: 14px; 
+}
+
+.header-left .el-divider { 
+  height: 28px; 
+  margin: 0 4px;
+}
+
+.draft-info h3 { 
+  margin: 0 0 4px 0; 
+  color: #1f2937; 
+  font-size: 16px; 
+  font-weight: 600; 
+  max-width: 350px; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+.meta-info { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  font-size: 12px; 
+  color: #6b7280; 
+}
+
+.header-right { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  flex-shrink: 0; 
+}
+
+.save-status { 
+  display: flex; 
+  align-items: center; 
+  gap: 5px; 
+  padding: 4px 10px; 
+  border-radius: 6px; 
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.save-status.status-saving { 
+  color: #3b82f6; 
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.save-status.status-saved { 
+  color: #10b981; 
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+}
+.save-status.status-error { 
+  color: #ef4444; 
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+.save-status.status-unsaved { 
+  color: #f59e0b; 
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+}
+
+.editor-main { 
+  flex: 1; 
+  display: flex; 
+  gap: 18px; 
+  padding: 18px 20px; 
+  overflow: hidden; 
+}
+
+.editor-panel { 
+  flex: 1; 
+  background: white; 
+  border-radius: 12px; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1);
+  overflow: hidden; 
+  position: relative;
+  transition: box-shadow 0.3s;
+}
+
+.editor-panel:hover {
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.1);
+}
 
 /* 浮动 AI 工具栏 */
 .floating-ai-toolbar {
   position: absolute;
   z-index: 1000;
   transform: translateX(-50%);
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  padding: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.1);
+  padding: 6px;
+  backdrop-filter: blur(10px);
 }
+
 .floating-ai-toolbar .el-button-group .el-button {
-  padding: 6px 10px;
-  font-size: 14px;
+  padding: 8px 12px;
+  font-size: 15px;
+  background: rgba(255,255,255,0.95);
+  border: none;
+  transition: all 0.2s;
 }
+
+.floating-ai-toolbar .el-button-group .el-button:hover {
+  background: white;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
 .floating-ai-toolbar::after {
   content: '';
   position: absolute;
-  bottom: -6px;
+  bottom: -8px;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid white;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #764ba2;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-5px); }
 
-.data-panel { width: 380px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-.data-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e4e7ed; background: #fafafa; }
-.data-panel-header h4 { margin: 0; font-size: 14px; }
-.data-panel-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-.no-file-selected { flex: 1; display: flex; align-items: center; justify-content: center; }
-.file-preview { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.file-info-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f0f9ff; border-bottom: 1px solid #e4e7ed; }
-.file-info-bar .file-name { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #409eff; }
-.preview-loading, .preview-error { padding: 16px; }
-.preview-content { flex: 1; overflow: auto; padding: 12px; background: #fafafa; }
+.fade-enter-active, .fade-leave-active { 
+  transition: opacity 0.2s, transform 0.2s; 
+}
+.fade-enter-from, .fade-leave-to { 
+  opacity: 0; 
+  transform: translateX(-50%) translateY(-8px) scale(0.95); 
+}
+
+.data-panel { 
+  width: 400px; 
+  background: white; 
+  border-radius: 12px; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1);
+  display: flex; 
+  flex-direction: column;
+  transition: box-shadow 0.3s;
+}
+
+.data-panel:hover {
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.1);
+}
+
+.data-panel-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 14px 16px; 
+  border-bottom: 1px solid #e5e7eb; 
+  background: linear-gradient(to bottom, #fafbfc 0%, #f9fafb 100%);
+  border-radius: 12px 12px 0 0;
+}
+
+.data-panel-header h4 { 
+  margin: 0; 
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  letter-spacing: 0.3px;
+}
+
+.data-panel-content { 
+  flex: 1; 
+  overflow: hidden; 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.no-file-selected { 
+  flex: 1; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+}
+
+.file-preview { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+}
+
+.file-info-bar { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 10px 14px; 
+  background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+  border-bottom: 1px solid #bfdbfe; 
+}
+
+.file-info-bar .file-name { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  font-size: 13px; 
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.preview-loading, .preview-error { 
+  padding: 20px; 
+}
+.preview-content { 
+  flex: 1; 
+  overflow: auto; 
+  padding: 14px; 
+  background: #f9fafb; 
+}
+
 .preview-content pre { 
   margin: 0; 
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace; 
   font-size: 13px; 
-  line-height: 1.6; 
+  line-height: 1.7; 
   white-space: pre-wrap; 
   word-break: break-all;
-  color: #303133;
+  color: #1f2937;
   background: white;
-  padding: 12px;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: box-shadow 0.2s;
 }
 
-.version-list { max-height: 400px; overflow-y: auto; }
-.version-item { padding: 12px; border-bottom: 1px solid #eee; }
-.version-item.current { background: #f0f9ff; border-left: 3px solid #409eff; }
-.version-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
-.version-summary { color: #666; font-size: 13px; margin-bottom: 8px; }
+.preview-content pre:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
 
-.file-list { max-height: 300px; overflow-y: auto; }
-.file-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
-.file-item:hover { background: #f5f7fa; }
-.file-item.selected { background: #ecf5ff; border-color: #409eff; }
-.file-details { flex: 1; }
-.file-details small { color: #909399; }
-.check { color: #67c23a; }
+.version-list { 
+  max-height: 450px; 
+  overflow-y: auto; 
+  padding: 4px;
+}
+
+.version-item { 
+  padding: 14px 16px; 
+  border-bottom: 1px solid #f3f4f6;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  transition: all 0.2s;
+}
+
+.version-item:hover {
+  background: #f9fafb;
+  transform: translateX(2px);
+}
+
+.version-item.current { 
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+.version-header { 
+  display: flex; 
+  justify-content: space-between; 
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.version-header strong {
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.version-summary { 
+  color: #6b7280; 
+  font-size: 13px; 
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.file-list { 
+  max-height: 350px; 
+  overflow-y: auto; 
+  padding: 4px;
+}
+
+.file-item { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  padding: 12px 14px; 
+  border-radius: 8px; 
+  cursor: pointer; 
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+}
+
+.file-item:hover { 
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  transform: translateX(2px);
+}
+
+.file-item.selected { 
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.file-details { 
+  flex: 1; 
+}
+
+.file-details div {
+  color: #1f2937;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.file-details small { 
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.check { 
+  color: #10b981;
+  font-size: 18px;
+}
 </style>
