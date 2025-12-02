@@ -26,6 +26,24 @@
         </div>
       </div>
       <div class="header-right">
+        <!-- AI 助手下拉菜单 -->
+        <el-dropdown @command="handleAIAction" trigger="click">
+          <el-button size="small" type="warning">
+            <el-icon><MagicStick /></el-icon> AI助手<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="polish">✨ 润色文本</el-dropdown-item>
+              <el-dropdown-item command="expand">📝 扩写内容</el-dropdown-item>
+              <el-dropdown-item command="condense">📉 精简内容</el-dropdown-item>
+              <el-dropdown-item command="rewrite">🔄 改写表达</el-dropdown-item>
+              <el-dropdown-item command="continue" divided>➡️ 续写内容</el-dropdown-item>
+              <el-dropdown-item command="explain">💡 解释说明</el-dropdown-item>
+              <el-dropdown-item command="translate_en" divided>🇬🇧 翻译英文</el-dropdown-item>
+              <el-dropdown-item command="translate_zh">🇨🇳 翻译中文</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button @click="toggleDataPanel" :type="showDataPanel ? 'primary' : 'default'" size="small">
           <el-icon><View /></el-icon> {{ showDataPanel ? '隐藏数据' : '查看数据' }}
         </el-button>
@@ -107,6 +125,14 @@
       </div>
       <template #footer><el-button @click="showFileSelector = false">取消</el-button><el-button type="primary" @click="confirmFileSelection" :disabled="!tempSelectedFile">确定</el-button></template>
     </el-dialog>
+    
+    <!-- AI 助手组件 -->
+    <AIAssistant 
+      v-model="showAIDialog" 
+      :text="aiSelectedText" 
+      :action="aiAction"
+      @apply="handleAIApply"
+    />
   </div>
 </template>
 
@@ -114,13 +140,15 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Clock, Document, ArrowDown, View, FolderOpened, Close, Check, Download, Loading, CircleCheck, CircleClose, Warning, CopyDocument } from '@element-plus/icons-vue'
+import { ArrowLeft, Clock, Document, ArrowDown, View, FolderOpened, Close, Check, Download, Loading, CircleCheck, CircleClose, Warning, CopyDocument, MagicStick } from '@element-plus/icons-vue'
 import { useDraftStore } from '@/stores/draft'
 import { useFileStore } from '@/stores/file'
 import { previewFile, type FilePreview } from '@/api/files'
 import { formatDate, formatFileSize } from '@/utils/format'
 import { exportReport, type ExportFormat } from '@/utils/export'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import AIAssistant from '@/components/AIAssistant.vue'
+import type { AIAction } from '@/api/ai'
 import type { DraftVersion, FileInfo } from '@/types'
 
 const route = useRoute()
@@ -162,6 +190,11 @@ const selectedDataFile = ref<FileInfo | null>(null)
 const tempSelectedFile = ref<FileInfo | null>(null)
 const previewData = ref<FilePreview | null>(null)
 const previewLoading = ref(false)
+
+// AI 助手相关
+const showAIDialog = ref(false)
+const aiSelectedText = ref('')
+const aiAction = ref<AIAction>('polish')
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -253,6 +286,77 @@ const handleExit = async () => {
   } else { 
     router.push('/template-select') 
   }
+}
+
+// AI 助手功能
+const handleAIAction = async (action: AIAction) => {
+  aiAction.value = action
+  
+  // 续写操作：直接使用最后500字作为上下文
+  if (action === 'continue') {
+    const content = editorContent.value
+    if (!content.trim()) {
+      ElMessage.warning('请先输入一些内容')
+      return
+    }
+    aiSelectedText.value = content.slice(-500)
+    showAIDialog.value = true
+    return
+  }
+  
+  // 其他操作：弹出输入框让用户输入要处理的文本
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '请输入或粘贴要处理的文本（建议 2000 字以内）',
+      `AI ${actionNames[action]}`,
+      {
+        confirmButtonText: '开始处理',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '在此输入要处理的文本...',
+        inputValidator: (val) => {
+          if (!val?.trim()) return '请输入文本内容'
+          if (val.length > 3000) return '文本过长，请控制在 3000 字以内'
+          return true
+        }
+      }
+    )
+    
+    aiSelectedText.value = value.trim()
+    showAIDialog.value = true
+  } catch {
+    // 用户取消
+  }
+}
+
+// AI 操作名称映射
+const actionNames: Record<AIAction, string> = {
+  polish: '润色',
+  expand: '扩写',
+  condense: '缩写',
+  rewrite: '改写',
+  continue: '续写',
+  explain: '解释',
+  translate_en: '翻译英文',
+  translate_zh: '翻译中文',
+  custom: '处理'
+}
+
+// AI 结果应用
+const handleAIApply = (result: string) => {
+  if (!markdownEditorRef.value) return
+  
+  // 续写：在末尾追加
+  if (aiAction.value === 'continue') {
+    markdownEditorRef.value.insertValue('\n\n' + result)
+    ElMessage.success('续写内容已添加到文末')
+  } else {
+    // 其他操作：插入到光标位置
+    markdownEditorRef.value.insertValue('\n\n' + result + '\n\n')
+    ElMessage.success('AI 生成的内容已插入，请根据需要调整')
+  }
+  
+  handleContentChange()
 }
 
 const handleExport = async (format: ExportFormat) => {

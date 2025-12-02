@@ -25,6 +25,8 @@ const editorContainer = ref<HTMLElement>()
 const editorId = `vditor-${Date.now()}`
 let vditor: Vditor | null = null
 let isInternalChange = false
+let isEditorReady = false
+let pendingValue: string | null = null
 
 const initEditor = () => {
   const container = document.getElementById(editorId)
@@ -62,9 +64,13 @@ const initEditor = () => {
       position: 'right'
     },
     after: () => {
-      if (vditor && props.modelValue) {
-        vditor.setValue(props.modelValue)
+      isEditorReady = true
+      // 设置初始值或待处理的值
+      const valueToSet = pendingValue !== null ? pendingValue : props.modelValue
+      if (vditor && valueToSet) {
+        vditor.setValue(valueToSet)
       }
+      pendingValue = null
     },
     input: (value: string) => {
       isInternalChange = true
@@ -82,7 +88,7 @@ const initEditor = () => {
           const reader = new FileReader()
           reader.onload = (e) => {
             const base64 = e.target?.result as string
-            if (vditor) {
+            if (vditor && isEditorReady) {
               vditor.insertValue(`![${file.name}](${base64})`)
             }
           }
@@ -96,7 +102,16 @@ const initEditor = () => {
 
 // 监听外部值变化
 watch(() => props.modelValue, (newVal) => {
-  if (!isInternalChange && vditor && newVal !== vditor.getValue()) {
+  if (isInternalChange) return
+  
+  // 如果编辑器还没准备好，保存待处理的值
+  if (!isEditorReady || !vditor) {
+    pendingValue = newVal || ''
+    return
+  }
+  
+  // 编辑器已就绪，直接设置值
+  if (newVal !== vditor.getValue()) {
     vditor.setValue(newVal || '')
   }
 })
@@ -112,7 +127,11 @@ const getValue = () => vditor?.getValue() || ''
 
 // 设置内容
 const setValue = (value: string) => {
-  vditor?.setValue(value)
+  if (isEditorReady && vditor) {
+    vditor.setValue(value)
+  } else {
+    pendingValue = value
+  }
 }
 
 // 插入内容
@@ -141,6 +160,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isEditorReady = false
   vditor?.destroy()
   vditor = null
 })
